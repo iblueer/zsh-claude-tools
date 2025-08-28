@@ -4,8 +4,16 @@ set -eu
 
 echo ">>> 开始卸载 claude-use ..."
 
-# 1) 删除安装目录
 INSTALL_ROOT="$HOME/.claude-tools"
+
+# 0) 卸载前：若当前目录在 ~/.claude-tools 下，先切回家目录，避免删目录后 $PWD 失效
+case "$PWD" in
+  "$INSTALL_ROOT"|"$INSTALL_ROOT"/*)
+    cd "$HOME"
+    ;;
+esac
+
+# 1) 删除安装目录
 if [ -d "$INSTALL_ROOT" ]; then
   rm -rf "$INSTALL_ROOT"
   echo "✓ 已删除目录 $INSTALL_ROOT"
