@@ -26,7 +26,7 @@
 只需一条命令：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/refs/heads/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/install.sh | sh
 
 ```
 
@@ -46,7 +46,7 @@ claude-use list
 执行：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/refs/heads/main/uninstall.sh | sh
+curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/uninstall.sh | sh
 ```
 
 以上命令会删除 `~/.claude-tools` 并清理 `~/.zshrc` 中的配置。  

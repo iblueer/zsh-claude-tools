@@ -3,16 +3,20 @@ set -eu
 
 echo ">>> 开始安装 claude-use ..."
 
-REPO_DIR=$(cd "$(dirname "$0")" && pwd)
 INSTALL_ROOT="$HOME/.claude-tools"
 BIN_DIR="$INSTALL_ROOT/bin"
 COMP_DIR="$INSTALL_ROOT/completions"
 
 mkdir -p "$BIN_DIR" "$COMP_DIR"
 
-cp -f "$REPO_DIR/bin/claude-use.zsh" "$BIN_DIR/claude-use.zsh"
-cp -f "$REPO_DIR/completions/_claude-use" "$COMP_DIR/_claude-use"
+# GitHub Raw 基础路径（根据仓库地址修改）
+BASE_URL="https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main"
 
+# 下载核心脚本
+curl -fsSL "$BASE_URL/bin/claude-use.zsh" -o "$BIN_DIR/claude-use.zsh"
+curl -fsSL "$BASE_URL/completions/_claude-use" -o "$COMP_DIR/_claude-use"
+
+# 默认环境目录
 : "${CLAUDE_CODE_HOME:="$HOME/.claude"}"
 ENV_DIR="$CLAUDE_CODE_HOME/envs"
 mkdir -p "$ENV_DIR"
@@ -29,7 +33,7 @@ E
   echo "✓ 已创建默认环境文件：$DEFAULT_ENV"
 fi
 
-# 写入 zshrc
+# 修改 zshrc
 ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
 BEGIN_MARK='# --- claude-tools BEGIN ---'
 END_MARK='# --- claude-tools END ---'

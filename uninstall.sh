@@ -3,6 +3,7 @@ set -eu
 
 echo ">>> 开始卸载 claude-use ..."
 
+# 删除安装目录
 INSTALL_ROOT="$HOME/.claude-tools"
 if [ -d "$INSTALL_ROOT" ]; then
   rm -rf "$INSTALL_ROOT"
@@ -11,6 +12,7 @@ else
   echo "ℹ 未发现 $INSTALL_ROOT"
 fi
 
+# 清理 zshrc 配置块
 ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
 if [ -f "$ZSHRC" ]; then
   TMP=$(mktemp)
