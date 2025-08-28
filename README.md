@@ -17,7 +17,6 @@
 - **自动记忆**：记住上次使用的环境，下次开机自动生效  
 - **补全支持**：Zsh Tab 补全子命令和配置名  
 - **跨平台编辑器支持**：`$VISUAL` / `$EDITOR` / VS Code / Sublime / nano / vim / open / xdg-open  
-- **兼容**：保留 `claude-which` 别名，映射到 `claude-use show`
 
 ---
 
