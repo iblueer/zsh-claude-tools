@@ -27,7 +27,6 @@
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/install.sh | sh
-
 ```
 
 安装完成后，请执行：
