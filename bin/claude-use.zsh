@@ -216,5 +216,3 @@ _cu_autoload_on_startup() {
 if [[ -o interactive ]]; then
   _cu_autoload_on_startup
 fi
-
-claude-which() { claude-use show; }
