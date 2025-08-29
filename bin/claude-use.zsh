@@ -33,8 +33,10 @@ _cu_open_path() {
   if [[ -d "$path" ]]; then
     # Prefer project-oriented openers for directories
     if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+    if command -v code-insiders >/dev/null 2>&1; then code-insiders -w "$path" && return 0; fi
+    # macOS: explicitly open with VS Code even if CLI is missing
+    if command -v open  >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
     if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
-    if command -v open  >/dev/null 2>&1; then open  "$path" && return 0; fi
     if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
     # Fall back to environment/editor hints
     if [[ -n "${VISUAL:-}" ]]; then "$VISUAL" "$path" && return 0; fi
@@ -49,6 +51,9 @@ _cu_open_path() {
   if [[ -n "${EDITOR:-}" ]]; then "$EDITOR" "$path" && return 0; fi
   # Prefer advanced GUI editors that support waiting
   if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+  if command -v code-insiders >/dev/null 2>&1; then code-insiders -w "$path" && return 0; fi
+  # macOS: explicitly open with VS Code even if CLI is missing
+  if command -v open  >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
   if command -v gedit >/dev/null 2>&1; then gedit --wait "$path" && return 0; fi
   # Terminal editors
   if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
