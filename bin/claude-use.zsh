@@ -29,13 +29,34 @@ _cu_open_path() {
     eval "$CLAUDE_USE_EDITOR_CMD ${(q)path}"
     return $?
   fi
+  # Directory vs file: choose sensible openers
+  if [[ -d "$path" ]]; then
+    # Prefer project-oriented openers for directories
+    if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+    if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
+    if command -v open  >/dev/null 2>&1; then open  "$path" && return 0; fi
+    if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
+    # Fall back to environment/editor hints
+    if [[ -n "${VISUAL:-}" ]]; then "$VISUAL" "$path" && return 0; fi
+    if [[ -n "${EDITOR:-}" ]]; then "$EDITOR" "$path" && return 0; fi
+    if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
+    if command -v nvim  >/dev/null 2>&1; then nvim  "$path" && return 0; fi
+    _cu_warn "请手动打开：$path"
+    return 0
+  fi
+  # Respect common env editor hints first
   if [[ -n "${VISUAL:-}" ]]; then "$VISUAL" "$path" && return 0; fi
   if [[ -n "${EDITOR:-}" ]]; then "$EDITOR" "$path" && return 0; fi
-  if command -v code >/dev/null 2>&1; then code -w "$path" && return 0; fi
-  if command -v subl >/dev/null 2>&1; then subl -w "$path" && return 0; fi
-  if command -v nano >/dev/null 2>&1; then nano "$path" && return 0; fi
-  if command -v vim  >/dev/null 2>&1; then vim  "$path" && return 0; fi
-  if command -v open >/dev/null 2>&1; then open "$path" && return 0; fi
+  # Prefer advanced GUI editors that support waiting
+  if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+  if command -v gedit >/dev/null 2>&1; then gedit --wait "$path" && return 0; fi
+  # Terminal editors
+  if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
+  if command -v nvim  >/dev/null 2>&1; then nvim  "$path" && return 0; fi
+  if command -v nano  >/dev/null 2>&1; then nano  "$path" && return 0; fi
+  # Other GUI editors/openers as fallback
+  if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
+  if command -v open  >/dev/null 2>&1; then open  "$path" && return 0; fi
   if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
   _cu_warn "请手动打开：$path"
 }
