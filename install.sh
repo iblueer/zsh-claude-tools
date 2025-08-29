@@ -99,7 +99,7 @@ if [ -n "${ZDOTDIR:-}" ]; then
 else
   ZRC="$HOME/.zshrc"
 fi
-echo "[Step 4] 更新 Zsh 配置：$ZRC （标记：$PROJECT_ID）"
+echo "[Step 4] 更新 Zsh 配置：$ZRC （标记：$PROJECT_ID ）"
 
 # 确保 rc 存在
 [ -f "$ZRC" ] || : > "$ZRC"
