@@ -9,7 +9,7 @@ on_err() {
   code=$?
   echo "✗ 安装失败 (exit=$code)。可能是网络/权限/文件系统问题。" >&2
   echo "提示：若启用了代理可尝试关闭；或设置镜像：export GITHUB_RAW_BASE=raw.fastgit.org 后重试。" >&2
-  exit $code
+  exit "$code"
 }
 trap 'on_err' ERR
 
@@ -70,19 +70,22 @@ cat >"$INIT_FILE" <<'EINIT'
 # 环境目录（若用户未设置）
 : ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 
-# 补全目录
+# 补全目录（若未包含则追加）
 case ":$fpath:" in
   *":$HOME/.claude-tools/completions:"*) ;;
   *) fpath+=("$HOME/.claude-tools/completions");;
 esac
 
-# 加载函数本体
-if [ -f "$HOME/.claude-tools/bin/claude-use.zsh" ]; then
-  # 仅在交互式 shell 加载（避免 login/cron 等非交互环境污染）
-  case "$-" in *i*) . "$HOME/.claude-tools/bin/claude-use.zsh" ;; esac
-fi
+# 加载函数本体（仅交互式 zsh）
+case "$-" in
+  *i*)
+    if [ -f "$HOME/.claude-tools/bin/claude-use.zsh" ]; then
+      . "$HOME/.claude-tools/bin/claude-use.zsh"
+    fi
+    ;;
+esac
 
-# 若未初始化补全，则初始化一次
+# 补全未初始化则初始化一次
 if ! typeset -f _main_complete >/dev/null 2>&1; then
   autoload -Uz compinit
   compinit
@@ -90,11 +93,16 @@ fi
 EINIT
 
 # ===== Step 4. 幂等修改 ~/.zshrc：唯一标记 + 原子替换 =====
-ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
-echo "[Step 4] 更新 Zsh 配置：$ZSHRC（标记：$PROJECT_ID）"
+# 显式判定 ZDOTDIR，避免任何参数展开的边缘行为
+if [ -n "${ZDOTDIR:-}" ]; then
+  ZRC="$ZDOTDIR/.zshrc"
+else
+  ZRC="$HOME/.zshrc"
+fi
+echo "[Step 4] 更新 Zsh 配置：$ZRC（标记：$PROJECT_ID）"
 
 # 确保 rc 存在
-[ -f "$ZSHRC" ] || : > "$ZSHRC"
+[ -f "$ZRC" ] || : > "$ZRC"
 
 # 先移除旧块（仅匹配整行唯一标记），再在尾部追加新块；用 mktemp 原子替换
 TMP_RC="$(mktemp)"
@@ -103,7 +111,7 @@ awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
   $0 == begin { skip=1; next }
   $0 == end   { skip=0; next }
   skip==0 { print }
-' "$ZSHRC" > "$TMP_RC"
+' "$ZRC" > "$TMP_RC"
 
 {
   printf "%s\n" "$BEGIN_MARK"
@@ -111,10 +119,11 @@ awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
   printf "%s\n" "$END_MARK"
 } >> "$TMP_RC"
 
-# 末尾确保换行（美观且对某些工具友好）
+# 末尾确保换行
 LC_ALL=C tail -c 1 "$TMP_RC" >/dev/null 2>&1 || printf '\n' >>"$TMP_RC"
 
-mv "$TMP_RC" "$ZSHRC"
+# 原子替换
+mv "$TMP_RC" "$ZRC"
 
 # ===== Step 5. 完成提示 =====
 echo
@@ -122,5 +131,5 @@ echo ">>> 安装完成 🎉"
 echo "安装目录：$INSTALL_ROOT"
 echo "环境目录：$ENV_DIR"
 echo
-echo "请执行： source ~/.zshrc"
+echo "请执行： source \"$ZRC\""
 echo "然后运行： claude-use list"
