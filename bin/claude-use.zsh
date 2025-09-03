@@ -26,8 +26,12 @@ _cu_list_names() {
 _cu_open_path() {
   local path="$1"
   if [[ -n "${CLAUDE_USE_EDITOR_CMD:-}" ]]; then
-    eval "$CLAUDE_USE_EDITOR_CMD ${(q)path}"
-    return $?
+    # Try custom editor command; fall back if it fails
+    if eval "$CLAUDE_USE_EDITOR_CMD ${(q)path}"; then
+      return 0
+    else
+      _cu_warn "自定义编辑器命令失败：$CLAUDE_USE_EDITOR_CMD"
+    fi
   fi
   # Directory vs file: choose sensible openers
   if [[ -d "$path" ]]; then
@@ -39,16 +43,32 @@ _cu_open_path() {
     if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
     if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
     # Fall back to environment/editor hints
-    if [[ -n "${VISUAL:-}" ]]; then "$VISUAL" "$path" && return 0; fi
-    if [[ -n "${EDITOR:-}" ]]; then "$EDITOR" "$path" && return 0; fi
+    if [[ -n "${VISUAL:-}" ]]; then
+      local -a _cu_cmd
+      _cu_cmd=("${(z)VISUAL}")
+      "${_cu_cmd[@]}" "$path" && return 0
+    fi
+    if [[ -n "${EDITOR:-}" ]]; then
+      local -a _cu_cmd
+      _cu_cmd=("${(z)EDITOR}")
+      "${_cu_cmd[@]}" "$path" && return 0
+    fi
     if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
     if command -v nvim  >/dev/null 2>&1; then nvim  "$path" && return 0; fi
     _cu_warn "请手动打开：$path"
     return 0
   fi
   # Respect common env editor hints first
-  if [[ -n "${VISUAL:-}" ]]; then "$VISUAL" "$path" && return 0; fi
-  if [[ -n "${EDITOR:-}" ]]; then "$EDITOR" "$path" && return 0; fi
+  if [[ -n "${VISUAL:-}" ]]; then
+    local -a _cu_cmd
+    _cu_cmd=("${(z)VISUAL}")
+    "${_cu_cmd[@]}" "$path" && return 0
+  fi
+  if [[ -n "${EDITOR:-}" ]]; then
+    local -a _cu_cmd
+    _cu_cmd=("${(z)EDITOR}")
+    "${_cu_cmd[@]}" "$path" && return 0
+  fi
   # Prefer advanced GUI editors that support waiting
   if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
   if command -v code-insiders >/dev/null 2>&1; then code-insiders -w "$path" && return 0; fi
