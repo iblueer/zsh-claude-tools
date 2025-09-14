@@ -1,17 +1,17 @@
-# bin/claude-use.zsh
-# Claude Code API 环境管理工具（Zsh）
+#!/usr/bin/env bash
+# Claude Code API 环境管理工具（Bash/Git Bash）
 # 配置项：
 #   CLAUDE_CODE_HOME        默认 $HOME/.claude   => 环境目录位于 $CLAUDE_CODE_HOME/envs
-#   CLAUDE_USE_EDITOR_CMD   覆盖编辑器命令（优先级最高），例如：export CLAUDE_USE_EDITOR_CMD="code -w"
+#   CLAUDE_USE_EDITOR_CMD   覆盖编辑器命令，例如：export CLAUDE_USE_EDITOR_CMD="code -w"
 
-: ${CLAUDE_CODE_HOME:="$HOME/.claude"}
-typeset -g CLAUDE_USE_ENV_DIR="$CLAUDE_CODE_HOME/envs"
-typeset -g CLAUDE_USE_LAST="$CLAUDE_USE_ENV_DIR/last_choice"
+: "${CLAUDE_CODE_HOME:="$HOME/.claude"}"
+CLAUDE_USE_ENV_DIR="$CLAUDE_CODE_HOME/envs"
+CLAUDE_USE_LAST="$CLAUDE_USE_ENV_DIR/last_choice"
 
-_cu_info() { print -r -- "▸ $*"; }
-_cu_warn() { print -r -- "⚠ $*"; }
-_cu_err()  { print -r -- "✗ $*"; }
-_cu_ok()   { print -r -- "✓ $*"; }
+_cu_info() { printf '▸ %s\n' "$*"; }
+_cu_warn() { printf '⚠ %s\n' "$*"; }
+_cu_err()  { printf '✗ %s\n' "$*"; }
+_cu_ok()   { printf '✓ %s\n' "$*"; }
 
 # Detect whether running on Windows (Git Bash / MSYS2 / Cygwin)
 _cu_is_windows() {
@@ -24,32 +24,34 @@ _cu_is_windows() {
 # Simple spinner for long-running operations
 _cu_with_spinner() {
   local msg="$1"; shift
-  print -n -- "$msg "
+  printf "%s " "$msg"
   {
-    local -a frames=('|' '/' '-' $'\\')
-    local i=1
+    local frames=('|' '/' '-' '\\')
+    local i=0
     while :; do
       printf "\r%s %s" "$msg" "${frames[i]}"
-      i=$(( i % ${#frames} + 1 ))
+      i=$(( (i + 1) % 4 ))
       sleep 0.1
     done
   } &
   local spid=$!
   "$@"
   local ret=$?
-  kill $spid 2>/dev/null
-  wait $spid 2>/dev/null || true
+  kill "$spid" 2>/dev/null
+  wait "$spid" 2>/dev/null || true
   printf "\r%s\n" "$msg"
   return $ret
 }
 
-_cu_ensure_envdir() { [[ -d "$CLAUDE_USE_ENV_DIR" ]] || mkdir -p "$CLAUDE_USE_ENV_DIR"; }
+_cu_ensure_envdir() { [ -d "$CLAUDE_USE_ENV_DIR" ] || mkdir -p "$CLAUDE_USE_ENV_DIR"; }
 
 _cu_list_names() {
   _cu_ensure_envdir
   local f
-  for f in "$CLAUDE_USE_ENV_DIR"/*.env(N); do
-    print -r -- "${f:t:r}"
+  for f in "$CLAUDE_USE_ENV_DIR"/*.env; do
+    [ -e "$f" ] || continue
+    f="$(basename "${f%.env}")"
+    printf '%s\n' "$f"
   done
 }
 
@@ -60,7 +62,7 @@ _cu_open_path() {
     if command -v cygpath >/dev/null 2>&1; then
       winpath="$(cygpath -w "$path")"
     fi
-    if [[ -d "$path" ]]; then
+    if [ -d "$path" ]; then
       if command -v code >/dev/null 2>&1; then code -w "$winpath" && return 0; fi
       if command -v explorer.exe >/dev/null 2>&1; then explorer.exe "$winpath" && return 0; fi
     else
@@ -73,86 +75,60 @@ _cu_open_path() {
     _cu_warn "请手动打开：$path"
     return 0
   fi
-  if [[ -n "${CLAUDE_USE_EDITOR_CMD:-}" ]]; then
-    # Try custom editor command; fall back if it fails
-    if eval "$CLAUDE_USE_EDITOR_CMD ${(q)path}"; then
+  if [ -n "${CLAUDE_USE_EDITOR_CMD:-}" ]; then
+    if eval "$CLAUDE_USE_EDITOR_CMD \"$path\""; then
       return 0
     else
       _cu_warn "自定义编辑器命令失败：$CLAUDE_USE_EDITOR_CMD"
     fi
   fi
-  # Directory vs file: choose sensible openers
-  if [[ -d "$path" ]]; then
-    # Prefer project-oriented openers for directories
-    if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+  if [ -d "$path" ]; then
+    if command -v code >/dev/null 2>&1; then code -w "$path" && return 0; fi
     if command -v code-insiders >/dev/null 2>&1; then code-insiders -w "$path" && return 0; fi
-    # macOS: explicitly open with VS Code even if CLI is missing
-    if command -v open  >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
-    if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
+    if command -v open >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
+    if command -v subl >/dev/null 2>&1; then subl -w "$path" && return 0; fi
     if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
-    # Fall back to environment/editor hints
-    if [[ -n "${VISUAL:-}" ]]; then
-      local -a _cu_cmd
-      _cu_cmd=("${(z)VISUAL}")
-      "${_cu_cmd[@]}" "$path" && return 0
-    fi
-    if [[ -n "${EDITOR:-}" ]]; then
-      local -a _cu_cmd
-      _cu_cmd=("${(z)EDITOR}")
-      "${_cu_cmd[@]}" "$path" && return 0
-    fi
-    if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
-    if command -v nvim  >/dev/null 2>&1; then nvim  "$path" && return 0; fi
+    if [ -n "${VISUAL:-}" ]; then "$VISUAL" "$path" && return 0; fi
+    if [ -n "${EDITOR:-}" ]; then "$EDITOR" "$path" && return 0; fi
+    if command -v vim >/dev/null 2>&1; then vim "$path" && return 0; fi
+    if command -v nvim >/dev/null 2>&1; then nvim "$path" && return 0; fi
     _cu_warn "请手动打开：$path"
     return 0
   fi
-  # Respect common env editor hints first
-  if [[ -n "${VISUAL:-}" ]]; then
-    local -a _cu_cmd
-    _cu_cmd=("${(z)VISUAL}")
-    "${_cu_cmd[@]}" "$path" && return 0
-  fi
-  if [[ -n "${EDITOR:-}" ]]; then
-    local -a _cu_cmd
-    _cu_cmd=("${(z)EDITOR}")
-    "${_cu_cmd[@]}" "$path" && return 0
-  fi
-  # Prefer advanced GUI editors that support waiting
-  if command -v code  >/dev/null 2>&1; then code  -w "$path" && return 0; fi
+  if [ -n "${VISUAL:-}" ]; then "$VISUAL" "$path" && return 0; fi
+  if [ -n "${EDITOR:-}" ]; then "$EDITOR" "$path" && return 0; fi
+  if command -v code >/dev/null 2>&1; then code -w "$path" && return 0; fi
   if command -v code-insiders >/dev/null 2>&1; then code-insiders -w "$path" && return 0; fi
-  # macOS: explicitly open with VS Code even if CLI is missing
-  if command -v open  >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
+  if command -v open >/dev/null 2>&1; then open -a "Visual Studio Code" "$path" && return 0; fi
   if command -v gedit >/dev/null 2>&1; then gedit --wait "$path" && return 0; fi
-  # Terminal editors
-  if command -v vim   >/dev/null 2>&1; then vim   "$path" && return 0; fi
-  if command -v nvim  >/dev/null 2>&1; then nvim  "$path" && return 0; fi
-  if command -v nano  >/dev/null 2>&1; then nano  "$path" && return 0; fi
-  # Other GUI editors/openers as fallback
-  if command -v subl  >/dev/null 2>&1; then subl -w "$path" && return 0; fi
-  if command -v open  >/dev/null 2>&1; then open  "$path" && return 0; fi
+  if command -v vim >/dev/null 2>&1; then vim "$path" && return 0; fi
+  if command -v nvim >/dev/null 2>&1; then nvim "$path" && return 0; fi
+  if command -v nano >/dev/null 2>&1; then nano "$path" && return 0; fi
+  if command -v subl >/dev/null 2>&1; then subl -w "$path" && return 0; fi
+  if command -v open >/dev/null 2>&1; then open "$path" && return 0; fi
   if command -v xdg-open >/dev/null 2>&1; then xdg-open "$path" && return 0; fi
   _cu_warn "请手动打开：$path"
 }
 
 _cu_load_env() {
   local file="$1"
-  if [[ ! -f "$file" ]]; then
+  if [ ! -f "$file" ]; then
     _cu_err "未找到环境文件：$file"
     return 1
   fi
-  unset -m 'ANTHROPIC_*'
+  for var in ${!ANTHROPIC_*}; do unset "$var"; done
   set -a
-  source "$file"
+  . "$file"
   set +a
 }
 
 _cu_show() {
-  if [[ -f "$CLAUDE_USE_LAST" ]]; then
+  if [ -f "$CLAUDE_USE_LAST" ]; then
     _cu_info "已记忆默认环境：$(<"$CLAUDE_USE_LAST")"
   else
     _cu_info "暂无已记忆默认环境。"
   fi
-  print -r -- "当前生效变量："
+  printf '当前生效变量：\n'
   printf '  %-28s = %s\n' ANTHROPIC_BASE_URL "${ANTHROPIC_BASE_URL:-<未设置>}"
   printf '  %-28s = %s\n' ANTHROPIC_AUTH_TOKEN "${ANTHROPIC_AUTH_TOKEN:+<已设置>}"
   printf '  %-28s = %s\n' ANTHROPIC_MODEL "${ANTHROPIC_MODEL:-<未设置>}"
@@ -162,30 +138,30 @@ _cu_show() {
 _cu_cmd_list() {
   _cu_ensure_envdir
   local saved=""
-  [[ -f "$CLAUDE_USE_LAST" ]] && saved="$(<"$CLAUDE_USE_LAST")"
-  local names=() n
-  names=($(_cu_list_names))
-  print -r -- "可用环境配置（$CLAUDE_USE_ENV_DIR）："
-  if (( ${#names} == 0 )); then
-    print -r -- "  （空）可添加 *.env 文件"
+  [ -f "$CLAUDE_USE_LAST" ] && saved="$(<"$CLAUDE_USE_LAST")"
+  mapfile -t names < <(_cu_list_names)
+  printf '可用环境配置（%s）：\n' "$CLAUDE_USE_ENV_DIR"
+  if [ ${#names[@]} -eq 0 ]; then
+    printf '  （空）可添加 *.env 文件\n'
     return 0
   fi
+  local n
   for n in "${names[@]}"; do
-    if [[ -n "$saved" && "$n" == "$saved" ]]; then
-      print -r -- "  * $n  (默认)"
+    if [ -n "$saved" ] && [ "$n" = "$saved" ]; then
+      printf '  * %s  (默认)\n' "$n"
     else
-      print -r -- "    $n"
+      printf '    %s\n' "$n"
     fi
   done
 }
 
 _cu_cmd_switch() {
   local name="$1"
-  [[ -z "$name" ]] && { _cu_err "用法：claude-use <name>"; return 2; }
+  [ -z "$name" ] && { _cu_err "用法：claude-use <name>"; return 2; }
   [[ "$name" == *.env ]] || name="$name.env"
   local file="$CLAUDE_USE_ENV_DIR/$name"
   if _cu_with_spinner "加载环境..." _cu_load_env "$file"; then
-    print -r -- "${name%.env}" > "$CLAUDE_USE_LAST"
+    printf '%s\n' "${name%.env}" > "$CLAUDE_USE_LAST"
     _cu_ok "已切换到环境：${name%.env}（已保存为默认）"
     _cu_show
   else
@@ -205,11 +181,11 @@ T
 
 _cu_cmd_new() {
   local name="$1"
-  [[ -z "$name" ]] && { _cu_err "用法：claude-use new <name>"; return 2; }
+  [ -z "$name" ] && { _cu_err "用法：claude-use new <name>"; return 2; }
   _cu_ensure_envdir
   [[ "$name" == *.env ]] || name="$name.env"
   local file="$CLAUDE_USE_ENV_DIR/$name"
-  if [[ -f "$file" ]]; then
+  if [ -f "$file" ]; then
     _cu_err "已存在：$file"
     return 1
   fi
@@ -220,11 +196,11 @@ _cu_cmd_new() {
 
 _cu_cmd_edit() {
   local name="$1"
-  [[ -z "$name" ]] && { _cu_err "用法：claude-use edit <name>"; return 2; }
+  [ -z "$name" ] && { _cu_err "用法：claude-use edit <name>"; return 2; }
   _cu_ensure_envdir
   [[ "$name" == *.env ]] || name="$name.env"
   local file="$CLAUDE_USE_ENV_DIR/$name"
-  if [[ ! -f "$file" ]]; then
+  if [ ! -f "$file" ]; then
     _cu_template > "$file"
     _cu_info "不存在，已创建模板：$file"
   fi
@@ -233,20 +209,20 @@ _cu_cmd_edit() {
 
 _cu_cmd_del() {
   local name="$1"
-  [[ -z "$name" ]] && { _cu_err "用法：claude-use del <name>"; return 2; }
+  [ -z "$name" ] && { _cu_err "用法：claude-use del <name>"; return 2; }
   _cu_ensure_envdir
   [[ "$name" == *.env ]] || name="$name.env"
   local file="$CLAUDE_USE_ENV_DIR/$name"
-  if [[ ! -f "$file" ]]; then
+  if [ ! -f "$file" ]; then
     _cu_err "未找到：$file"
     return 1
   fi
-  print -n -- "确认删除 ${name%.env} ? 输入 yes 以继续："
+  printf '确认删除 %s ? 输入 yes 以继续：' "${name%.env}"
   local answer; read -r answer
-  if [[ "$answer" == "yes" ]]; then
+  if [ "$answer" = "yes" ]; then
     rm -f -- "$file"
     _cu_ok "已删除：$file"
-    if [[ -f "$CLAUDE_USE_LAST" && "$( <"$CLAUDE_USE_LAST")" == "${name%.env}" ]]; then
+    if [ -f "$CLAUDE_USE_LAST" ] && [ "$(<"$CLAUDE_USE_LAST")" = "${name%.env}" ]; then
       rm -f -- "$CLAUDE_USE_LAST"
       _cu_info "已清理默认记忆。"
     fi
@@ -294,19 +270,20 @@ claude-use() {
 _cu_autoload_on_startup() {
   _cu_ensure_envdir
   local chosen=""
-  if [[ -f "$CLAUDE_USE_LAST" ]]; then
+  if [ -f "$CLAUDE_USE_LAST" ]; then
     chosen="$(<"$CLAUDE_USE_LAST")"
   else
-    local names=($(_cu_list_names))
-    if (( ${#names} > 0 )); then
-      chosen="${names[1]}"
+    mapfile -t names < <(_cu_list_names)
+    if [ ${#names[@]} -gt 0 ]; then
+      chosen="${names[0]}"
     fi
   fi
-  if [[ -n "$chosen" ]]; then
+  if [ -n "$chosen" ]; then
     _cu_cmd_switch "$chosen" >/dev/null 2>&1 || true
   fi
 }
 
-if [[ -o interactive ]]; then
+if [[ $- == *i* ]]; then
   _cu_autoload_on_startup
 fi
+

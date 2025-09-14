@@ -1,8 +1,8 @@
 # zsh-claude-tools
 
-`claude-use` —— Claude Code API 环境管理小工具（Zsh）
+`claude-use` —— Claude Code API 环境管理小工具（Zsh/Bash）
 
-让你在不同 Claude Code API 环境配置之间快速切换，支持自动记忆、开机生效和 Zsh 补全。
+让你在不同 Claude Code API 环境配置之间快速切换，支持自动记忆、开机生效，并兼容 Zsh、Bash（含 Windows Git Bash）。
 
 ---
 
@@ -15,7 +15,7 @@
   - `edit <name>`：编辑配置（不存在则创建模板）
   - `del <name>`：删除配置（需输入 `yes` 确认）
 - **自动记忆**：记住上次使用的环境，下次开机自动生效  
-- **补全支持**：Zsh Tab 补全子命令和配置名  
+- **补全支持**：Zsh Tab 补全子命令和配置名（Bash 暂无补全）  
 - **跨平台编辑器支持**：`$VISUAL` / `$EDITOR` / VS Code / Sublime / nano / vim / open / xdg-open  
 
 ---
@@ -31,7 +31,9 @@ curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/insta
 安装完成后，请执行：
 
 ```sh
-source ~/.zshrc
+source ~/.zshrc   # 若使用 Zsh
+# 或
+source ~/.bashrc  # 若使用 Bash
 claude-use list
 ```
 
@@ -47,7 +49,7 @@ claude-use list
 curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/uninstall.sh | sh
 ```
 
-以上命令会删除 `~/.claude-tools` 并清理 `~/.zshrc` 中的配置。  
+以上命令会删除 `~/.claude-tools` 并清理 `~/.zshrc` 或 `~/.bashrc` 中的配置。  
 **注意**：不会删除你的 API 配置文件（默认在 `~/.claude/envs`）。  
 如果要彻底清理：
 
@@ -98,7 +100,7 @@ export ANTHROPIC_SMALL_FAST_MODEL="claude-3-haiku"
 ## 项目结构
 
 ```
-bin/          主脚本 claude-use.zsh
+bin/          主脚本 claude-use.zsh/claude-use.bash
 completions/  Zsh 补全脚本
 install.sh    安装脚本
 uninstall.sh  卸载脚本
