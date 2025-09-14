@@ -5,12 +5,13 @@ set -eu
 echo ">>> 开始卸载 claude-use ..."
 
 INSTALL_ROOT="$HOME/.claude-tools"
+PROJECT_ID="${CLAUDE_PROJECT_ID:-iblueer/zsh-claude-tools}"
+BEGIN_MARK="# >>> ${PROJECT_ID} BEGIN (managed) >>>"
+END_MARK="# <<< ${PROJECT_ID} END   <<<"
 
-# 0) 卸载前：若当前目录在 ~/.claude-tools 下，先切回家目录，避免删目录后 $PWD 失效
+# 0) 若当前目录在安装目录下，先切回家目录
 case "$PWD" in
-  "$INSTALL_ROOT"|"$INSTALL_ROOT"/*)
-    cd "$HOME"
-    ;;
+  "$INSTALL_ROOT"|"$INSTALL_ROOT"/*) cd "$HOME" ;;
 esac
 
 # 1) 删除安装目录
@@ -21,20 +22,24 @@ else
   echo "ℹ 未发现 $INSTALL_ROOT"
 fi
 
-# 2) 清理 zshrc（考虑 ZDOTDIR）
-ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
-if [ -f "$ZSHRC" ]; then
-  TMP=$(mktemp)
-  awk '
-    /^# --- claude-tools BEGIN ---/ {flag=1; next}
-    /^# --- claude-tools END ---/   {flag=0; next}
-    flag==0 {print}
-  ' "$ZSHRC" > "$TMP"
-  mv "$TMP" "$ZSHRC"
-  echo "✓ 已从 $ZSHRC 移除 claude-tools 配置块"
-else
-  echo "ℹ 未发现 $ZSHRC"
-fi
+remove_block() {
+  file="$1"
+  if [ -f "$file" ]; then
+    tmp=$(mktemp)
+    awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
+      $0 == begin {skip=1; next}
+      $0 == end {skip=0; next}
+      skip==0 {print}
+    ' "$file" >"$tmp"
+    mv "$tmp" "$file"
+    echo "✓ 已从 $file 移除 claude-tools 配置块"
+  else
+    echo "ℹ 未发现 $file"
+  fi
+}
+
+remove_block "${ZDOTDIR:-$HOME}/.zshrc"
+remove_block "$HOME/.bashrc"
 
 echo
 echo ">>> 卸载完成 🎉"

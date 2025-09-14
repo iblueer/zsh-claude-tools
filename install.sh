@@ -24,7 +24,11 @@ BASE_URL="https://${RAW_HOST}/${REPO_PATH}/${BRANCH}"
 INSTALL_ROOT="$HOME/.claude-tools"
 BIN_DIR="$INSTALL_ROOT/bin"
 COMP_DIR="$INSTALL_ROOT/completions"
-INIT_FILE="$INSTALL_ROOT/init.zsh"
+SHELL_NAME="$(basename "${CLAUDE_TOOLS_SHELL:-${SHELL:-}}")"
+case "$SHELL_NAME" in
+  bash) INIT_FILE="$INSTALL_ROOT/init.bash" ;;
+  *) SHELL_NAME=zsh; INIT_FILE="$INSTALL_ROOT/init.zsh" ;;
+esac
 
 # 项目标记（可通过 CLAUDE_PROJECT_ID 覆盖）
 PROJECT_ID="${CLAUDE_PROJECT_ID:-iblueer/zsh-claude-tools}"
@@ -41,6 +45,7 @@ fetch() {
   curl -fL --retry 3 --retry-delay 1 -o "$dst" "$url"
 }
 fetch "$BASE_URL/bin/claude-use.zsh"      "$BIN_DIR/claude-use.zsh"
+fetch "$BASE_URL/bin/claude-use.bash"     "$BIN_DIR/claude-use.bash"
 fetch "$BASE_URL/completions/_claude-use" "$COMP_DIR/_claude-use"
 
 # ===== Step 2. 环境目录与默认示例 =====
@@ -61,9 +66,19 @@ export ANTHROPIC_SMALL_FAST_MODEL=""
 E
 fi
 
-# ===== Step 3. 生成我们的 init.zsh（后续升级只改这里） =====
-echo "[Step 3] 生成 init：$INIT_FILE"
-cat >"$INIT_FILE" <<'EINIT'
+# ===== Step 3. 生成 init 脚本 =====
+if [ "$SHELL_NAME" = "bash" ]; then
+  echo "[Step 3] 生成 init：$INIT_FILE"
+  cat >"$INIT_FILE" <<'EINIT'
+# zsh-claude-tools init for bash (auto-generated)
+: ${CLAUDE_CODE_HOME:="$HOME/.claude"}
+if [ -f "$HOME/.claude-tools/bin/claude-use.bash" ]; then
+  . "$HOME/.claude-tools/bin/claude-use.bash"
+fi
+EINIT
+else
+  echo "[Step 3] 生成 init：$INIT_FILE"
+  cat >"$INIT_FILE" <<'EINIT'
 # zsh-claude-tools init (auto-generated)
 # 幂等：尽量避免重复影响用户环境
 
@@ -91,18 +106,23 @@ if ! typeset -f _main_complete >/dev/null 2>&1; then
   compinit
 fi
 EINIT
-
-# ===== Step 4. 幂等修改 ~/.zshrc：唯一标记 + 原子替换 =====
-# 显式判定 ZDOTDIR，避免任何参数展开的边缘行为
-if [ -n "${ZDOTDIR:-}" ]; then
-  ZRC="$ZDOTDIR/.zshrc"
-else
-  ZRC="$HOME/.zshrc"
 fi
-echo "[Step 4] 更新 Zsh 配置：$ZRC （标记：$PROJECT_ID ）"
+
+# ===== Step 4. 幂等修改 rc 文件：唯一标记 + 原子替换 =====
+if [ "$SHELL_NAME" = "bash" ]; then
+  RC="$HOME/.bashrc"
+  echo "[Step 4] 更新 Bash 配置：$RC （标记：$PROJECT_ID ）"
+else
+  if [ -n "${ZDOTDIR:-}" ]; then
+    RC="$ZDOTDIR/.zshrc"
+  else
+    RC="$HOME/.zshrc"
+  fi
+  echo "[Step 4] 更新 Zsh 配置：$RC （标记：$PROJECT_ID ）"
+fi
 
 # 确保 rc 存在
-[ -f "$ZRC" ] || : > "$ZRC"
+[ -f "$RC" ] || : > "$RC"
 
 # 先移除旧块（仅匹配整行唯一标记），再在尾部追加新块；用 mktemp 原子替换
 TMP_RC="$(mktemp)"
@@ -111,11 +131,15 @@ awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
   $0 == begin { skip=1; next }
   $0 == end   { skip=0; next }
   skip==0 { print }
-' "$ZRC" > "$TMP_RC"
+' "$RC" > "$TMP_RC"
 
 {
   printf "%s\n" "$BEGIN_MARK"
-  printf '%s\n' 'source "$HOME/.claude-tools/init.zsh"'
+  if [ "$SHELL_NAME" = "bash" ]; then
+    printf '%s\n' 'source "$HOME/.claude-tools/init.bash"'
+  else
+    printf '%s\n' 'source "$HOME/.claude-tools/init.zsh"'
+  fi
   printf "%s\n" "$END_MARK"
 } >> "$TMP_RC"
 
@@ -123,7 +147,7 @@ awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
 LC_ALL=C tail -c 1 "$TMP_RC" >/dev/null 2>&1 || printf '\n' >>"$TMP_RC"
 
 # 原子替换
-mv "$TMP_RC" "$ZRC"
+mv "$TMP_RC" "$RC"
 
 # ===== Step 5. 完成提示 =====
 echo
@@ -131,5 +155,6 @@ echo ">>> 安装完成 🎉"
 echo "安装目录：$INSTALL_ROOT"
 echo "环境目录：$ENV_DIR"
 echo
-echo "请执行： source \"$ZRC\""
+echo "请执行： source \"$RC\""
 echo "然后运行： claude-use list"
+
