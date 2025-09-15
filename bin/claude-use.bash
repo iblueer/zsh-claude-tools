@@ -35,6 +35,7 @@ _cu_with_spinner() {
     done
   } &
   local spid=$!
+  disown "$spid" 2>/dev/null || true
   "$@"
   local ret=$?
   kill "$spid" 2>/dev/null

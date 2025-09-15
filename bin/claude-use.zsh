@@ -33,7 +33,7 @@ _cu_with_spinner() {
       i=$(( i % ${#frames} + 1 ))
       sleep 0.1
     done
-  } &
+  } &!
   local spid=$!
   "$@"
   local ret=$?
