@@ -25,7 +25,7 @@ fi
 remove_block() {
   file="$1"
   if [ -f "$file" ]; then
-    tmp=$(mktemp)
+    tmp=$(mktemp 2>/dev/null || mktemp -t claude-uninstall)
     awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
       $0 == begin {skip=1; next}
       $0 == end {skip=0; next}

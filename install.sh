@@ -42,7 +42,14 @@ mkdir -p "$BIN_DIR" "$COMP_DIR"
 fetch() {
   url="$1"; dst="$2"
   echo "[Step 1] 下载 $url -> $dst"
-  curl -fL --retry 3 --retry-delay 1 -o "$dst" "$url"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 --retry-delay 1 -o "$dst" "$url"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$dst" "$url"
+  else
+    echo "需要 curl 或 wget 以下载文件，请先安装其中之一。" >&2
+    exit 1
+  fi
 }
 fetch "$BASE_URL/bin/claude-use.zsh"      "$BIN_DIR/claude-use.zsh"
 fetch "$BASE_URL/bin/claude-use.bash"     "$BIN_DIR/claude-use.bash"
@@ -124,8 +131,8 @@ fi
 # 确保 rc 存在
 [ -f "$RC" ] || : > "$RC"
 
-# 先移除旧块（仅匹配整行唯一标记），再在尾部追加新块；用 mktemp 原子替换
-TMP_RC="$(mktemp)"
+# 先移除旧块（仅匹配整行唯一标记），再在尾部追加新块；用 mktemp 原子替换（兼容 GNU/BSD）
+TMP_RC="$(mktemp 2>/dev/null || mktemp -t claude-tools)"
 awk -v begin="$BEGIN_MARK" -v end="$END_MARK" '
   BEGIN { skip=0 }
   $0 == begin { skip=1; next }
