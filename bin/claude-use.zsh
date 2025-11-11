@@ -7,6 +7,7 @@
 : ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 typeset -g CLAUDE_USE_ENV_DIR="$CLAUDE_CODE_HOME/envs"
 typeset -g CLAUDE_USE_LAST="$CLAUDE_USE_ENV_DIR/last_choice"
+typeset -ga CLAUDE_USE_SUBCOMMANDS=(help list ls new edit del delete rm show current open dir)
 
 _cu_info() { print -r -- "▸ $*"; }
 _cu_warn() { print -r -- "⚠ $*"; }
@@ -51,6 +52,52 @@ _cu_list_names() {
   for f in "$CLAUDE_USE_ENV_DIR"/*.env(N); do
     print -r -- "${f:t:r}"
   done
+}
+
+_cu_env_candidates() {
+  local cur="${1:-}"
+  local prefix suffix search_dir entry base rel
+  reply=()
+  if [[ "$cur" == */* ]]; then
+    prefix="${cur%/*}"
+    suffix="${cur##*/}"
+    search_dir="$CLAUDE_USE_ENV_DIR/$prefix"
+  else
+    prefix=""
+    suffix="$cur"
+    search_dir="$CLAUDE_USE_ENV_DIR"
+  fi
+  [[ -d "$search_dir" ]] || return
+  local -a entries=()
+  if command -v find >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+      base="${entry##*/}"
+      [[ "$base" == "$suffix"* ]] || continue
+      if [[ -d "$entry" ]]; then
+        rel="${prefix:+$prefix/}$base/"
+      elif [[ "$entry" == *.env ]]; then
+        rel="${prefix:+$prefix/}${base%.env}"
+      else
+        continue
+      fi
+      entries+=("$rel")
+    done < <(LC_ALL=C find "$search_dir" -mindepth 1 -maxdepth 1 \( -type d -o -type f -name '*.env' \) -print 2>/dev/null | LC_ALL=C sort)
+  else
+    for entry in "$search_dir"/*; do
+      [[ -e "$entry" ]] || continue
+      base="${entry##*/}"
+      [[ "$base" == "$suffix"* ]] || continue
+      if [[ -d "$entry" ]]; then
+        rel="${prefix:+$prefix/}$base/"
+      elif [[ "$entry" == *.env ]]; then
+        rel="${prefix:+$prefix/}${base%.env}"
+      else
+        continue
+      fi
+      entries+=("$rel")
+    done
+  fi
+  (( ${#entries[@]} > 0 )) && reply=(${(ou)entries})
 }
 
 _cu_open_path() {
@@ -291,6 +338,31 @@ claude-use() {
   esac
 }
 
+_cu_zsh_complete() {
+  local cur="${words[CURRENT]}"
+  local -a envs
+  _cu_env_candidates "$cur"
+  envs=("${reply[@]}")
+  if (( CURRENT == 2 )); then
+    if [[ "$cur" != */* ]]; then
+      (( ${#CLAUDE_USE_SUBCOMMANDS[@]} > 0 )) && compadd -a CLAUDE_USE_SUBCOMMANDS
+    fi
+    (( ${#envs[@]} > 0 )) && compadd -Q -S '' -a envs
+    return
+  fi
+  case "${words[2]}" in
+    new|edit|del|delete|rm)
+      (( ${#envs[@]} > 0 )) && compadd -Q -S '' -a envs
+      ;;
+  esac
+}
+
+_cu_setup_completion() {
+  if (( $+functions[compdef] )); then
+    compdef _cu_zsh_complete claude-use
+  fi
+}
+
 _cu_autoload_on_startup() {
   _cu_ensure_envdir
   local chosen=""
@@ -308,5 +380,6 @@ _cu_autoload_on_startup() {
 }
 
 if [[ -o interactive ]]; then
+  _cu_setup_completion
   _cu_autoload_on_startup
 fi
