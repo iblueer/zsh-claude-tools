@@ -7,7 +7,7 @@
 : ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 typeset -g CLAUDE_USE_ENV_DIR="$CLAUDE_CODE_HOME/envs"
 typeset -g CLAUDE_USE_LAST="$CLAUDE_USE_ENV_DIR/last_choice"
-typeset -ga CLAUDE_USE_SUBCOMMANDS=(help list ls new edit del delete rm show current open dir)
+typeset -ga CLAUDE_USE_SUBCOMMANDS=(help list ls new edit del show open)
 
 _cu_info() { print -r -- "▸ $*"; }
 _cu_warn() { print -r -- "⚠ $*"; }
@@ -331,9 +331,9 @@ claude-use() {
     list|ls)             _cu_cmd_list ;;
     new)                 _cu_cmd_new "$@" ;;
     edit)                _cu_cmd_edit "$@" ;;
-    del|delete|rm)       _cu_cmd_del "$@" ;;
-    show|current)        _cu_show ;;
-    open|dir)            _cu_open_path "$CLAUDE_USE_ENV_DIR" ;;
+    del)                 _cu_cmd_del "$@" ;;
+    show)                _cu_show ;;
+    open)                _cu_open_path "$CODEX_USE_ENV_DIR" ;;
     *)                   _cu_cmd_switch "$cmd" ;;
   esac
 }
