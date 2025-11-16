@@ -235,7 +235,6 @@ _cu_help() {
 用法：
   claude-switch list                 列出全部环境
   claude-switch use <name>           切换到 <name> 环境（无需 .env 后缀）
-  claude-switch <name>               切换到 <name> 环境（兼容旧用法）
   claude-switch new <name>           新建 <name>.env，并打开编辑器
   claude-switch edit <name>          编辑 <name>.env（不存在则创建模板）
   claude-switch del <name>           删除 <name>.env（需输入 yes 确认）
@@ -264,7 +263,7 @@ claude-switch() {
     del|delete|rm)       _cu_cmd_del "$@" ;;
     show|current)        _cu_show ;;
     open|dir)            _cu_open_path "$CLAUDE_USE_ENV_DIR" ;;
-    *)                   _cu_cmd_switch "$cmd" ;;
+    *)                   _cu_err "未知命令：$cmd"; _cu_info "请使用 'claude-switch use <name>' 切换环境，或运行 'claude-switch help' 查看帮助"; return 2 ;;
   esac
 }
 
