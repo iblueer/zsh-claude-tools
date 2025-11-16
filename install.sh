@@ -104,7 +104,7 @@ esac
 # 加载函数本体（仅交互式 zsh）
 case "$-" in
   *i*)
-    if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ]; then
+    if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ] && command -v zsh >/dev/null 2>&1; then
       . "$HOME/.claude-tools/bin/claude-switch.zsh"
     fi
     ;;
