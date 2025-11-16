@@ -16,20 +16,20 @@ on_err() {
 }
 trap 'on_err' ERR
 
-echo ">>> 开始本地安装 claude-use ..."
+echo ">>> 开始本地安装 claude-switch ..."
 
 # 获取脚本所在目录(即项目源码目录)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "[Info] 项目源码目录: $SCRIPT_DIR"
 
 # 检查必要文件是否存在
-if [ ! -f "$SCRIPT_DIR/bin/claude-use.zsh" ] || \
-   [ ! -f "$SCRIPT_DIR/bin/claude-use.bash" ] || \
-   [ ! -f "$SCRIPT_DIR/completions/_claude-use" ]; then
+if [ ! -f "$SCRIPT_DIR/bin/claude-switch.zsh" ] || \
+   [ ! -f "$SCRIPT_DIR/bin/claude-switch.bash" ] || \
+   [ ! -f "$SCRIPT_DIR/completions/_claude-switch" ]; then
   echo "✗ 错误: 项目源码不完整,请确认以下文件存在:" >&2
-  echo "  - bin/claude-use.zsh" >&2
-  echo "  - bin/claude-use.bash" >&2
-  echo "  - completions/_claude-use" >&2
+  echo "  - bin/claude-switch.zsh" >&2
+  echo "  - bin/claude-switch.bash" >&2
+  echo "  - completions/_claude-switch" >&2
   exit 1
 fi
 
@@ -51,9 +51,12 @@ mkdir -p "$BIN_DIR" "$COMP_DIR"
 
 # 从本地复制文件而非下载
 echo "[Step 1] 复制脚本文件到 $BIN_DIR"
+cp -f "$SCRIPT_DIR/bin/claude-switch.zsh" "$BIN_DIR/claude-switch.zsh"
+cp -f "$SCRIPT_DIR/bin/claude-switch.bash" "$BIN_DIR/claude-switch.bash"
 cp -f "$SCRIPT_DIR/bin/claude-use.zsh" "$BIN_DIR/claude-use.zsh"
 cp -f "$SCRIPT_DIR/bin/claude-use.bash" "$BIN_DIR/claude-use.bash"
 echo "[Step 1] 复制补全文件到 $COMP_DIR"
+cp -f "$SCRIPT_DIR/completions/_claude-switch" "$COMP_DIR/_claude-switch"
 cp -f "$SCRIPT_DIR/completions/_claude-use" "$COMP_DIR/_claude-use"
 
 : "${CLAUDE_HOME:="$HOME/.claude"}"
@@ -80,8 +83,8 @@ if [ "$SHELL_NAME" = "bash" ]; then
   cat >"$INIT_FILE" <<'EINIT'
 # zsh-claude-tools init for bash (auto-generated)
 : ${CLAUDE_HOME:="$HOME/.claude"}
-if [ -f "$HOME/.claude-tools/bin/claude-use.bash" ]; then
-  . "$HOME/.claude-tools/bin/claude-use.bash"
+if [ -f "$HOME/.claude-tools/bin/claude-switch.bash" ]; then
+  . "$HOME/.claude-tools/bin/claude-switch.bash"
 fi
 EINIT
 else
@@ -99,8 +102,8 @@ esac
 
 case "$-" in
   *i*)
-    if [ -f "$HOME/.claude-tools/bin/claude-use.zsh" ]; then
-      . "$HOME/.claude-tools/bin/claude-use.zsh"
+    if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ]; then
+      . "$HOME/.claude-tools/bin/claude-switch.zsh"
     fi
     ;;
 esac
@@ -154,4 +157,4 @@ echo "安装目录：$INSTALL_ROOT"
 echo "环境目录：$ENV_DIR"
 echo
 echo "请执行： source \"$RC\""
-echo "然后运行： claude-use list"
+echo "然后运行： claude-switch list"
