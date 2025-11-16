@@ -51,9 +51,12 @@ fetch() {
     exit 1
   fi
 }
-fetch "$BASE_URL/bin/claude-use.zsh"      "$BIN_DIR/claude-use.zsh"
-fetch "$BASE_URL/bin/claude-use.bash"     "$BIN_DIR/claude-use.bash"
-fetch "$BASE_URL/completions/_claude-use" "$COMP_DIR/_claude-use"
+fetch "$BASE_URL/bin/claude-switch.zsh"      "$BIN_DIR/claude-switch.zsh"
+fetch "$BASE_URL/bin/claude-switch.bash"     "$BIN_DIR/claude-switch.bash"
+fetch "$BASE_URL/bin/claude-use.zsh"         "$BIN_DIR/claude-use.zsh"
+fetch "$BASE_URL/bin/claude-use.bash"        "$BIN_DIR/claude-use.bash"
+fetch "$BASE_URL/completions/_claude-switch" "$COMP_DIR/_claude-switch"
+fetch "$BASE_URL/completions/_claude-use"    "$COMP_DIR/_claude-use"
 
 # ===== Step 2. 环境目录与默认示例 =====
 : "${CLAUDE_CODE_HOME:="$HOME/.claude"}"
@@ -79,8 +82,8 @@ if [ "$SHELL_NAME" = "bash" ]; then
   cat >"$INIT_FILE" <<'EINIT'
 # zsh-claude-tools init for bash (auto-generated)
 : ${CLAUDE_CODE_HOME:="$HOME/.claude"}
-if [ -f "$HOME/.claude-tools/bin/claude-use.bash" ]; then
-  . "$HOME/.claude-tools/bin/claude-use.bash"
+if [ -f "$HOME/.claude-tools/bin/claude-switch.bash" ]; then
+  . "$HOME/.claude-tools/bin/claude-switch.bash"
 fi
 EINIT
 else
@@ -101,8 +104,8 @@ esac
 # 加载函数本体（仅交互式 zsh）
 case "$-" in
   *i*)
-    if [ -f "$HOME/.claude-tools/bin/claude-use.zsh" ]; then
-      . "$HOME/.claude-tools/bin/claude-use.zsh"
+    if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ]; then
+      . "$HOME/.claude-tools/bin/claude-switch.zsh"
     fi
     ;;
 esac
@@ -163,5 +166,5 @@ echo "安装目录：$INSTALL_ROOT"
 echo "环境目录：$ENV_DIR"
 echo
 echo "请执行： source \"$RC\""
-echo "然后运行： claude-use list"
+echo "然后运行： claude-switch list"
 

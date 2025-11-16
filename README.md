@@ -1,6 +1,6 @@
 # zsh-claude-tools
 
-`claude-use` —— Claude Code API 环境管理小工具（Zsh/Bash）
+`claude-switch` —— Claude Code API 环境管理小工具（Zsh/Bash）
 
 让你在不同 Claude Code API 环境配置之间快速切换，支持自动记忆、开机生效，并兼容 Zsh、Bash（含 Windows Git Bash）。
 
@@ -10,7 +10,8 @@
 
 - **环境管理**
   - `list`：列出所有环境
-  - `claude-use <name>`：切换环境
+  - `claude-switch use <name>`：切换环境
+  - `claude-switch <name>`：切换环境（兼容旧用法）
   - `new <name>`：新建配置并打开编辑器
   - `edit <name>`：编辑配置（不存在则创建模板）
   - `del <name>`：删除配置（需输入 `yes` 确认）
@@ -34,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/iblueer/zsh-claude-tools/main/insta
 source ~/.zshrc   # 若使用 Zsh
 # 或
 source ~/.bashrc  # 若使用 Bash
-claude-use list
+claude-switch list
 ```
 
 确认工具可用。
@@ -63,22 +64,24 @@ rm -rf ~/.claude
 
 ```sh
 # 列出所有配置
-claude-use list
+claude-switch list
 
 # 新建一个配置（会生成 foo.env 并打开编辑器）
-claude-use new foo
+claude-switch new foo
 
 # 切换到 foo 环境
-claude-use foo
+claude-switch use foo
+# 或使用兼容语法
+claude-switch foo
 
 # 编辑配置
-claude-use edit foo
+claude-switch edit foo
 
 # 删除配置
-claude-use del foo
+claude-switch del foo
 
 # 显示默认记忆与当前生效的变量
-claude-use show
+claude-switch show
 ```
 
 环境文件默认保存在：  
@@ -100,7 +103,8 @@ export ANTHROPIC_SMALL_FAST_MODEL="claude-3-haiku"
 ## 项目结构
 
 ```
-bin/          主脚本 claude-use.zsh/claude-use.bash
+bin/          主脚本 claude-switch.zsh/claude-switch.bash
+             兼容脚本 claude-use.zsh/claude-use.bash
 completions/  Zsh 补全脚本
 install.sh    安装脚本
 uninstall.sh  卸载脚本

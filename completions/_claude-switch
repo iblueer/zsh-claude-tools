@@ -1,5 +1,4 @@
-# zsh completion for claude-use (backward compatibility)
-# This file provides backward compatibility for the old claude-use command
+# zsh completion for claude-switch
 
 if ! type compinit >/dev/null 2>&1; then
   autoload -Uz compinit
@@ -15,10 +14,11 @@ _cu_list_envs() {
   print -l -- $envs
 }
 
-_claude-use() {
+_claude-switch() {
   local -a subs
   subs=(
     'list:列出所有环境'
+    'use:切换到指定环境'
     'new:新建环境'
     'edit:编辑环境'
     'del:删除环境'
@@ -40,7 +40,7 @@ _claude-use() {
 
   if (( CURRENT == 3 )); then
     case ${words[2]} in
-      edit|del|delete|rm)
+      use|edit|del|delete|rm)
         compadd -a envs
         return
         ;;
@@ -51,4 +51,5 @@ _claude-use() {
   fi
 }
 
-compdef _claude-use claude-use
+compdef _claude-switch claude-switch
+compdef _claude-switch claude-use  # Backward compatibility
