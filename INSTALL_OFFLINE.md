@@ -80,7 +80,7 @@ source ~/.zshrc
 source ~/.bashrc
 
 # 验证安装
-claude-use list
+claude-switch list
 ```
 
 ## 与在线安装的区别
@@ -95,9 +95,11 @@ claude-use list
 ## 注意事项
 
 1. **文件完整性**: 确保上传的压缩包包含以下必要文件:
-   - `bin/claude-use.zsh`
-   - `bin/claude-use.bash`
-   - `completions/_claude-use`
+   - `bin/claude-switch.zsh`
+   - `bin/claude-switch.bash`
+   - `bin/llmc.zsh`
+   - `bin/llmc.bash`
+   - `completions/_claude-switch`
    - `install_locally.sh`
 
 2. **权限**: 安装脚本会自动设置适当的文件权限,但请确保有写入 `$HOME` 目录的权限
@@ -141,7 +143,7 @@ export ANTHROPIC_SMALL_FAST_MODEL="claude-3-haiku"
 保存后，执行：
 
 ```sh
-claude-use default
+claude-switch use default
 ```
 
 即可加载该环境配置。

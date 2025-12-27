@@ -48,12 +48,22 @@ _cu_ensure_envdir() { [ -d "$CLAUDE_USE_ENV_DIR" ] || mkdir -p "$CLAUDE_USE_ENV_
 
 _cu_list_names() {
   _cu_ensure_envdir
-  local f
-  for f in "$CLAUDE_USE_ENV_DIR"/*.env; do
-    [ -e "$f" ] || continue
-    f="$(basename "${f%.env}")"
-    printf '%s\n' "$f"
-  done
+  local f rel
+  # 使用 find 递归查找所有 .env 文件
+  if command -v find >/dev/null 2>&1; then
+    while IFS= read -r f; do
+      # 计算相对路径并移除 .env 后缀
+      rel="${f#$CLAUDE_USE_ENV_DIR/}"
+      printf '%s\n' "${rel%.env}"
+    done < <(command find "$CLAUDE_USE_ENV_DIR" -type f -name '*.env' 2>/dev/null | LC_ALL=C sort)
+  else
+    # 降级：只显示第一层（兼容没有 find 的系统）
+    for f in "$CLAUDE_USE_ENV_DIR"/*.env; do
+      [ -e "$f" ] || continue
+      f="$(basename "${f%.env}")"
+      printf '%s\n' "$f"
+    done
+  fi
 }
 
 _cu_open_path() {
@@ -111,14 +121,58 @@ _cu_open_path() {
 
 _cu_load_env() {
   local file="$1"
+
+  # 立即保存PATH - 在任何操作之前
+  local saved_path="$PATH"
+  local saved_home="$HOME"
+  local saved_shell="$SHELL"
+  local saved_user="$USER"
+  local saved_logname="$LOGNAME"
+
   if [ ! -f "$file" ]; then
     _cu_err "未找到环境文件：$file"
     return 1
   fi
-  for var in ${!ANTHROPIC_*}; do unset "$var"; done
-  set -a
-  . "$file"
-  set +a
+
+  # 安全地清理 ANTHROPIC_ 开头的环境变量
+  local var
+  for var in $(compgen -v | command grep '^ANTHROPIC_' 2>/dev/null || true); do
+    unset "$var" 2>/dev/null || true
+  done
+
+  # 使用临时变量读取 .env 文件，避免 set -a 的副作用
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    # 跳过注释和空行
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line// /}" ]] && continue
+
+    # 解析 export 语句
+    if [[ "$line" =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      value="${BASH_REMATCH[2]}"
+
+      # 移除引号
+      value="${value%\"}"
+      value="${value#\"}"
+      value="${value%\'}"
+      value="${value#\'}"
+
+      # 只导出 ANTHROPIC_ 开头的变量
+      if [[ "$key" == ANTHROPIC_* ]]; then
+        export "$key=$value" 2>/dev/null || true
+      fi
+    fi
+  done < "$file"
+
+  # 强制恢复关键环境变量 - 确保即使上面失败也会执行
+  export PATH="$saved_path"
+  export HOME="$saved_home"
+  export SHELL="$saved_shell"
+  export USER="$saved_user"
+  export LOGNAME="$saved_logname"
+
+  return 0
 }
 
 _cu_show() {
@@ -279,7 +333,9 @@ _cu_autoload_on_startup() {
     fi
   fi
   if [ -n "$chosen" ]; then
-    _cu_cmd_switch "$chosen" >/dev/null 2>&1 || true
+    [[ "$chosen" == *.env ]] || chosen="$chosen.env"
+    local file="$CLAUDE_USE_ENV_DIR/$chosen"
+    _cu_load_env "$file" >/dev/null 2>&1 || true
   fi
 }
 

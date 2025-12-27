@@ -2,7 +2,7 @@
 # POSIX shell, supports: curl | sh
 set -eu
 
-echo ">>> 开始卸载 claude-use ..."
+echo ">>> 开始卸载 claude-switch ..."
 
 INSTALL_ROOT="$HOME/.claude-tools"
 PROJECT_ID="${CLAUDE_PROJECT_ID:-iblueer/zsh-claude-tools}"
@@ -43,4 +43,8 @@ remove_block "$HOME/.bashrc"
 
 echo
 echo ">>> 卸载完成 🎉"
-echo "提示：不会删除你的 API 配置文件（默认在 ~/.claude/envs）。如需彻底清理： rm -rf ~/.claude"
+echo "提示：不会删除你的配置文件（默认在 ~/.claude）："
+echo "  - API 环境配置：~/.claude/envs/*.env"
+echo "  - 星标数据：~/.claude/stars"
+echo "  - 默认环境记忆：~/.claude/envs/last_choice"
+echo "如需彻底清理，请执行：rm -rf ~/.claude"

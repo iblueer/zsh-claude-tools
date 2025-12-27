@@ -13,7 +13,7 @@ on_err() {
 }
 trap 'on_err' ERR
 
-echo ">>> 开始安装 claude-use ..."
+echo ">>> 开始安装 zsh-claude-tools ..."
 
 # ===== Step 0. 基础配置与目录 =====
 RAW_HOST="${GITHUB_RAW_BASE:-raw.githubusercontent.com}"
@@ -53,10 +53,9 @@ fetch() {
 }
 fetch "$BASE_URL/bin/claude-switch.zsh"      "$BIN_DIR/claude-switch.zsh"
 fetch "$BASE_URL/bin/claude-switch.bash"     "$BIN_DIR/claude-switch.bash"
-fetch "$BASE_URL/bin/claude-use.zsh"         "$BIN_DIR/claude-use.zsh"
-fetch "$BASE_URL/bin/claude-use.bash"        "$BIN_DIR/claude-use.bash"
+fetch "$BASE_URL/bin/llmc.zsh"               "$BIN_DIR/llmc.zsh"
+fetch "$BASE_URL/bin/llmc.bash"              "$BIN_DIR/llmc.bash"
 fetch "$BASE_URL/completions/_claude-switch" "$COMP_DIR/_claude-switch"
-fetch "$BASE_URL/completions/_claude-use"    "$COMP_DIR/_claude-use"
 
 # ===== Step 2. 环境目录与默认示例 =====
 : "${CLAUDE_CODE_HOME:="$HOME/.claude"}"
@@ -85,6 +84,9 @@ if [ "$SHELL_NAME" = "bash" ]; then
 if [ -f "$HOME/.claude-tools/bin/claude-switch.bash" ]; then
   . "$HOME/.claude-tools/bin/claude-switch.bash"
 fi
+if [ -f "$HOME/.claude-tools/bin/llmc.bash" ]; then
+  . "$HOME/.claude-tools/bin/llmc.bash"
+fi
 EINIT
 else
   echo "[Step 3] 生成 init：$INIT_FILE"
@@ -106,6 +108,9 @@ case "$-" in
   *i*)
     if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ] && command -v zsh >/dev/null 2>&1; then
       . "$HOME/.claude-tools/bin/claude-switch.zsh"
+    fi
+    if [ -f "$HOME/.claude-tools/bin/llmc.zsh" ] && command -v zsh >/dev/null 2>&1; then
+      . "$HOME/.claude-tools/bin/llmc.zsh"
     fi
     ;;
 esac
@@ -167,4 +172,3 @@ echo "环境目录：$ENV_DIR"
 echo
 echo "请执行： source \"$RC\""
 echo "然后运行： claude-switch list"
-

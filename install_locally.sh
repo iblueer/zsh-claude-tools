@@ -53,14 +53,13 @@ mkdir -p "$BIN_DIR" "$COMP_DIR"
 echo "[Step 1] 复制脚本文件到 $BIN_DIR"
 cp -f "$SCRIPT_DIR/bin/claude-switch.zsh" "$BIN_DIR/claude-switch.zsh"
 cp -f "$SCRIPT_DIR/bin/claude-switch.bash" "$BIN_DIR/claude-switch.bash"
-cp -f "$SCRIPT_DIR/bin/claude-use.zsh" "$BIN_DIR/claude-use.zsh"
-cp -f "$SCRIPT_DIR/bin/claude-use.bash" "$BIN_DIR/claude-use.bash"
+cp -f "$SCRIPT_DIR/bin/llmc.zsh" "$BIN_DIR/llmc.zsh"
+cp -f "$SCRIPT_DIR/bin/llmc.bash" "$BIN_DIR/llmc.bash"
 echo "[Step 1] 复制补全文件到 $COMP_DIR"
 cp -f "$SCRIPT_DIR/completions/_claude-switch" "$COMP_DIR/_claude-switch"
-cp -f "$SCRIPT_DIR/completions/_claude-use" "$COMP_DIR/_claude-use"
 
-: "${CLAUDE_HOME:="$HOME/.claude"}"
-ENV_DIR="$CLAUDE_HOME/envs"
+: "${CLAUDE_CODE_HOME:="$HOME/.claude"}"
+ENV_DIR="$CLAUDE_CODE_HOME/envs"
 
 echo "[Step 2] 准备环境目录：$ENV_DIR"
 mkdir -p "$ENV_DIR"
@@ -82,9 +81,12 @@ if [ "$SHELL_NAME" = "bash" ]; then
   echo "[Step 3] 生成 init：$INIT_FILE"
   cat >"$INIT_FILE" <<'EINIT'
 # zsh-claude-tools init for bash (auto-generated)
-: ${CLAUDE_HOME:="$HOME/.claude"}
+: ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 if [ -f "$HOME/.claude-tools/bin/claude-switch.bash" ]; then
   . "$HOME/.claude-tools/bin/claude-switch.bash"
+fi
+if [ -f "$HOME/.claude-tools/bin/llmc.bash" ]; then
+  . "$HOME/.claude-tools/bin/llmc.bash"
 fi
 EINIT
 else
@@ -93,7 +95,7 @@ else
 # zsh-claude-tools init (auto-generated)
 # 幂等：尽量避免重复影响用户环境
 
-: ${CLAUDE_HOME:="$HOME/.claude"}
+: ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 
 case ":$fpath:" in
   *":$HOME/.claude-tools/completions:"*) ;;
@@ -104,6 +106,9 @@ case "$-" in
   *i*)
     if [ -f "$HOME/.claude-tools/bin/claude-switch.zsh" ]; then
       . "$HOME/.claude-tools/bin/claude-switch.zsh"
+    fi
+    if [ -f "$HOME/.claude-tools/bin/llmc.zsh" ]; then
+      . "$HOME/.claude-tools/bin/llmc.zsh"
     fi
     ;;
 esac
