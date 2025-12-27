@@ -14,6 +14,42 @@ _llmc_warn() { printf '⚠ %s\n' "$*"; }
 _llmc_err()  { printf '✗ %s\n' "$*"; }
 _llmc_ok()   { printf '✓ %s\n' "$*"; }
 
+_llmc_tui_restore() {
+  clear
+  printf '\e[?25h'
+}
+
+# 扫描整个 envs 目录树（用于“展开视图”）
+# 返回格式：type|path|display_name|depth
+_llmc_scan_tree() {
+  local root="${1:-$LLMC_ENV_DIR}"
+  local entry rel type depth slashes
+
+  if command -v find >/dev/null 2>&1; then
+    while IFS= read -r entry; do
+      [ -e "$entry" ] || continue
+      rel="${entry#$root/}"
+      [ "$rel" != "$entry" ] || continue
+
+      if [ -d "$entry" ]; then
+        type="dir"
+        rel="${rel%/}/"
+      elif [[ "$entry" == *.env ]]; then
+        type="env"
+        rel="${rel%.env}"
+      else
+        continue
+      fi
+
+      slashes="${rel//[^\/]/}"
+      depth="${#slashes}"
+      printf '%s|%s|%s|%s\n' "$type" "$entry" "$rel" "$depth"
+    done < <(find "$root" -mindepth 1 \( -type d -o -type f -name '*.env' \) -print 2>/dev/null | LC_ALL=C sort)
+  else
+    _llmc_scan_items "$root" "" | awk -F'|' '{print $1 "|" $2 "|" $3 "|0"}'
+  fi
+}
+
 _llmc_switch_cmd() {
   if command -v claude-switch >/dev/null 2>&1; then
     printf '%s\n' "claude-switch"
@@ -148,6 +184,11 @@ _llmc_interactive() {
   local cursor=0
   local current_env
   current_env="$(_llmc_get_current)"
+  local tree_mode=1
+  local want_jump_env=""
+  local saved_dir="$current_dir"
+  local saved_prefix="$current_prefix"
+  local saved_cursor=$cursor
 
   # 隐藏光标
   printf '\e[?25l'
@@ -155,40 +196,114 @@ _llmc_interactive() {
   # 清屏并显示标题
   clear
 
+  want_jump_env="$current_env"
+
+  _llmc_activate_current() {
+    local selected="${items[cursor]}"
+    local sel_type sel_path sel_display sel_depth
+    if [ "$tree_mode" = "1" ]; then
+      IFS='|' read -r sel_type sel_path sel_display sel_depth <<<"$selected"
+    else
+      sel_type="${selected%%|*}"
+      sel_path="${selected#*|}"; sel_path="${sel_path%%|*}"
+      sel_display="${selected##*|}"
+    fi
+
+    if [ "$sel_type" = "dir" ]; then
+      if [ "$tree_mode" = "1" ]; then
+        tree_mode=0
+        current_dir="$sel_path"
+        current_prefix="${sel_display%/}"
+        cursor=0
+      elif [ "$sel_display" = ".." ]; then
+        current_dir="${current_dir%/*}"
+        [ -z "$current_dir" ] && current_dir="$LLMC_ENV_DIR"
+        if [[ "$current_prefix" == */* ]]; then
+          current_prefix="${current_prefix%/*}"
+        else
+          current_prefix=""
+        fi
+      else
+        current_dir="$sel_path"
+        current_prefix="${sel_display%/}"
+      fi
+      cursor=0
+    else
+      _llmc_tui_restore
+      _llmc_forward use "$sel_display"
+      return 0
+    fi
+    return 1
+  }
+
   while true; do
+    current_env="$(_llmc_get_current)"
+
     # 扫描当前目录
     local -a items=()
     local -a display_items=()
-    local type path display
+    local type path display depth
 
-    while IFS='|' read -r type path display; do
-      items+=("$type|$path|$display")
+    if [ "$tree_mode" = "1" ]; then
+      while IFS='|' read -r type path display depth; do
+        items+=("$type|$path|$display|$depth")
 
-      # 构建显示文本
-      local prefix_icon=""
-      local suffix_mark=""
+        # 构建显示文本
+        local prefix_icon=""
+        local suffix_mark=""
+        local indent=""
+        if [ "${depth:-0}" -gt 0 ]; then
+          indent="$(printf '%*s' $((depth * 2)) '')"
+        fi
 
-      if [ "$type" = "dir" ]; then
-        prefix_icon="📁"
-      else
-        # 检查是否是当前环境
-        if [ -n "$current_env" ] && [ "$display" = "$current_env" ]; then
-          prefix_icon="💡"
+        if [ "$type" = "dir" ]; then
+          prefix_icon="📁"
         else
-          prefix_icon="  "
+          # 检查是否是当前环境
+          if [ -n "$current_env" ] && [ "$display" = "$current_env" ]; then
+            prefix_icon="💡"
+          else
+            prefix_icon="  "
+          fi
+
+          # 检查是否有星标
+          if _llmc_is_starred "$display"; then
+            suffix_mark=" 🌟"
+          fi
         fi
 
-        # 检查是否有星标
-        if _llmc_is_starred "$display"; then
-          suffix_mark=" 🌟"
-        fi
-      fi
+        display_items+=("$indent$prefix_icon $display$suffix_mark")
+      done < <(_llmc_scan_tree "$LLMC_ENV_DIR")
+    else
+      while IFS='|' read -r type path display; do
+        items+=("$type|$path|$display")
 
-      display_items+=("$prefix_icon $display$suffix_mark")
-    done < <(_llmc_scan_items "$current_dir" "$current_prefix")
+        # 构建显示文本
+        local prefix_icon=""
+        local suffix_mark=""
+
+        if [ "$type" = "dir" ]; then
+          prefix_icon="📁"
+        else
+          # 检查是否是当前环境
+          if [ -n "$current_env" ] && [ "$display" = "$current_env" ]; then
+            prefix_icon="💡"
+          else
+            prefix_icon="  "
+          fi
+
+          # 检查是否有星标
+          if _llmc_is_starred "$display"; then
+            suffix_mark=" 🌟"
+          fi
+        fi
+
+        display_items+=("$prefix_icon $display$suffix_mark")
+      done < <(_llmc_scan_items "$current_dir" "$current_prefix")
+    fi
 
     # 如果不在根目录，添加 ".." 返回项
-    if [ "$current_dir" != "$LLMC_ENV_DIR" ]; then
+    if [ "$tree_mode" != "1" ] && [ "$current_dir" != "$LLMC_ENV_DIR" ]; then
       items=("dir|../..|.." "${items[@]}")
       display_items=("📂 .." "${display_items[@]}")
     fi
@@ -208,13 +323,33 @@ _llmc_interactive() {
     (( cursor < 0 )) && cursor=0
     (( cursor >= ${#items[@]} )) && cursor=$((${#items[@]} - 1))
 
+    if [ "$tree_mode" = "1" ] && [ -n "$want_jump_env" ]; then
+      local i t p d
+      for i in "${!items[@]}"; do
+        IFS='|' read -r t p d depth <<<"${items[i]}"
+        if [ "$t" = "env" ] && [ "$d" = "$want_jump_env" ]; then
+          cursor=$i
+          break
+        fi
+      done
+      want_jump_env=""
+    fi
+
     # 清屏并重新绘制
     clear
     printf '╔═══════════════════════════════════════════════════════════╗\n'
     printf '║  LLMC - 环境选择器                                         ║\n'
-    printf '║  当前: %-51s ║\n' "${current_prefix:-/}"
+    if [ "$tree_mode" = "1" ]; then
+      printf '║  当前: %-51s ║\n' "${current_env:-<未选择>}"
+    else
+      printf '║  当前: %-51s ║\n' "${current_prefix:-/}"
+    fi
     printf '╠═══════════════════════════════════════════════════════════╣\n'
-    printf '║  ↑/k:上  ↓/j:下  ←/h:返回  →/l/Enter:选择  Space:星标  q:退出 ║\n'
+    if [ "$tree_mode" = "1" ]; then
+      printf '║  ↑/k:上  ↓/j:下  ←/h:上个目录  →/l:下个目录  Enter:选择  Space:星标  Tab:收起  q:退出 ║\n'
+    else
+      printf '║  ↑/k:上  ↓/j:下  ←/h:返回  →/l/Enter:选择  Space:星标  Tab:展开  q:退出 ║\n'
+    fi
     printf '╚═══════════════════════════════════════════════════════════╝\n'
     printf '\n'
 
@@ -240,47 +375,72 @@ _llmc_interactive() {
         (( cursor < ${#items[@]} - 1 )) && (( cursor++ ))
         ;;
       h|left)
-        # 返回上级目录
-        if [ "$current_dir" != "$LLMC_ENV_DIR" ]; then
+        if [ "$tree_mode" = "1" ]; then
+          # 展开视图：跳到上一个目录
+          local i t
+          for (( i = cursor - 1; i >= 0; i-- )); do
+            IFS='|' read -r t _ _ _ <<<"${items[i]}"
+            if [ "$t" = "dir" ]; then
+              cursor=$i
+              break
+            fi
+          done
+        elif [ "$current_dir" != "$LLMC_ENV_DIR" ]; then
+          # 返回上级目录
           current_dir="${current_dir%/*}"
           [ -z "$current_dir" ] && current_dir="$LLMC_ENV_DIR"
-          current_prefix="${current_prefix%/*}"
-          cursor=0
-        fi
-        ;;
-      l|right|'')
-        # 选择/进入 (空字符串表示Enter键)
-        local selected="${items[cursor]}"
-        local sel_type="${selected%%|*}"
-        local sel_path="${selected#*|}"; sel_path="${sel_path%%|*}"
-        local sel_display="${selected##*|}"
-
-        if [ "$sel_type" = "dir" ]; then
-          if [ "$sel_display" = ".." ]; then
-            # 返回上级
-            current_dir="${current_dir%/*}"
-            [ -z "$current_dir" ] && current_dir="$LLMC_ENV_DIR"
+          if [[ "$current_prefix" == */* ]]; then
             current_prefix="${current_prefix%/*}"
           else
-            # 进入子目录
-            current_dir="$sel_path"
-            current_prefix="${sel_display%/}"
+            current_prefix=""
           fi
           cursor=0
-        else
-          # 选择环境
-          clear
-          printf '\e[?25h'  # 恢复光标
-
-          _llmc_forward use "$sel_display"
-          return 0
         fi
         ;;
-      ' '|$'\t')
+      l|right)
+        if [ "$tree_mode" = "1" ]; then
+          # 展开视图：跳到下一个目录
+          local i t
+          for (( i = cursor + 1; i < ${#items[@]}; i++ )); do
+            IFS='|' read -r t _ _ _ <<<"${items[i]}"
+            if [ "$t" = "dir" ]; then
+              cursor=$i
+              break
+            fi
+          done
+          continue
+        fi
+        _llmc_activate_current && return 0
+        ;;
+      '')
+        # 选择/进入 (空字符串表示Enter键)
+        _llmc_activate_current && return 0
+        ;;
+      $'\t')
+        if [ "$tree_mode" = "1" ]; then
+          tree_mode=0
+          current_dir="$saved_dir"
+          current_prefix="$saved_prefix"
+          cursor=$saved_cursor
+        else
+          saved_dir="$current_dir"
+          saved_prefix="$current_prefix"
+          saved_cursor=$cursor
+          tree_mode=1
+          want_jump_env="$current_env"
+          cursor=0
+        fi
+        ;;
+      ' ')
         # 切换星标
         local selected="${items[cursor]}"
-        local sel_type="${selected%%|*}"
-        local sel_display="${selected##*|}"
+        local sel_type sel_display _p _d
+        if [ "$tree_mode" = "1" ]; then
+          IFS='|' read -r sel_type _p sel_display _d <<<"$selected"
+        else
+          sel_type="${selected%%|*}"
+          sel_display="${selected##*|}"
+        fi
 
         if [ "$sel_type" = "env" ]; then
           if _llmc_is_starred "$sel_display"; then
@@ -298,8 +458,7 @@ _llmc_interactive() {
   done
 
   # 恢复光标并清屏
-  clear
-  printf '\e[?25h'
+  _llmc_tui_restore
   _llmc_info "已退出"
 }
 
@@ -372,9 +531,11 @@ llmc() {
 交互式快捷键：
   ↑/k        向上移动
   ↓/j        向下移动
-  ←/h        返回上级目录
-  →/l/Enter  进入目录或选择环境
-  Space/Tab  切换星标
+  ←/h        上一个目录（展开视图）；或返回上级目录（目录视图）
+  →/l        下一个目录（展开视图）；或进入目录（目录视图）
+  Enter      选择环境；在展开视图中 Enter 目录可进入目录视图
+  Space      切换星标
+  Tab        展开/收起目录树视图
   q/ESC      退出
 
 HELP
