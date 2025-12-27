@@ -46,6 +46,28 @@ for sh in zsh bash; do
     echo "$out" | grep -q "需要 TTY" || { echo "FAIL: llmc should require TTY"; exit 1; }
   fi
 
+  if command -v python3 >/dev/null 2>&1; then
+    echo "== claude-switch syncs VSCode settings env vars =="
+    settings="$tmp/vscode-settings.json"
+    cat >"$settings" <<'JSONC'
+{
+  // keep other keys
+  "other": 1,
+  "claudeCode.environmentVariables": [
+    { "name": "ANTHROPIC_BASE_URL", "value": "old" },
+    { "name": "ANTHROPIC_MODEL", "value": "oldmodel" },
+    { "name": "FOO", "value": "bar" },
+  ],
+}
+JSONC
+    printf 'export ANTHROPIC_BASE_URL="https://x.example.com"\n' > "$CLAUDE_CODE_HOME/envs/foo.env"
+    $sh -c "set -e; export CLAUDE_CODE_HOME='$tmp/.claude'; export CLAUDE_VSCODE_SETTINGS='$settings'; export CLAUDE_SYNC_VSCODE_SETTINGS=1; source '$BIN'; claude-switch use foo >/dev/null 2>&1"
+    grep -q '"name": "ANTHROPIC_BASE_URL"' "$settings" || { echo "FAIL: VSCode settings missing ANTHROPIC_BASE_URL"; exit 1; }
+    grep -q '"value": "https://x.example.com"' "$settings" || { echo "FAIL: VSCode settings did not update ANTHROPIC_BASE_URL value"; exit 1; }
+    ! grep -q 'ANTHROPIC_MODEL' "$settings" || { echo "FAIL: VSCode settings should remove unset ANTHROPIC_MODEL"; exit 1; }
+    grep -q '"name": "FOO"' "$settings" || { echo "FAIL: VSCode settings should preserve non-ANTHROPIC entries"; exit 1; }
+  fi
+
   echo "== switch foo =="
   echo 'export ANTHROPIC_BASE_URL="https://x.example.com"' >> "$CLAUDE_CODE_HOME/envs/foo.env"
   _run 'claude-switch use foo ; test "$ANTHROPIC_BASE_URL" = "https://x.example.com"' || { echo "FAIL: switch foo"; exit 1; }
