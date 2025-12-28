@@ -297,19 +297,24 @@ _llmc_interactive() {
   typeset -i header_lines=7
   typeset -i view_top=1
   typeset -i view_height=1
+  typeset -i view_width=80
 
   _llmc_update_viewport() {
     typeset -i term_lines=${LINES:-0}
+    typeset -i term_cols=${COLUMNS:-0}
     if (( term_lines < 1 )); then
       typeset stty_out
       stty_out="$(command stty size </dev/tty 2>/dev/null || true)"
       if [[ "$stty_out" == <->\ <-> ]]; then
         term_lines="${stty_out%% *}"
+        term_cols="${stty_out##* }"
       fi
     fi
     (( term_lines < 1 )) && term_lines=24
+    (( term_cols < 1 )) && term_cols=80
     view_height=$(( term_lines - header_lines ))
     (( view_height < 1 )) && view_height=1
+    view_width=$term_cols
   }
 
   _llmc_update_viewport
@@ -339,11 +344,46 @@ _llmc_interactive() {
     fi
     typeset -i row=$(( header_lines + 1 + idx - view_top ))
     printf '\033[%d;1H\033[2K' "$row"
+    typeset -i max_chars=$(( view_width > 2 ? view_width - 1 : view_width ))
+    typeset line
     if (( selected )); then
-      printf '%s' "  ▶ ${display_items[idx]}"
+      line="  ▶ ${display_items[idx]}"
     else
-      printf '%s' "    ${display_items[idx]}"
+      line="    ${display_items[idx]}"
     fi
+    if (( max_chars > 0 && ${#line} > max_chars )); then
+      line="${line[1,$max_chars]}"
+    fi
+    if (( selected )); then
+      printf '%s' "$line"
+    else
+      printf '%s' "$line"
+    fi
+  }
+
+  _llmc_render_list() {
+    _llmc_adjust_view
+    typeset -i start_row=$(( header_lines + 1 ))
+    printf '\033[%d;1H\033[J' "$start_row"
+
+    typeset -i i bot
+    bot=$(( view_top + view_height - 1 ))
+    (( bot > ${#items} )) && bot=${#items}
+
+    typeset -i max_chars=$(( view_width > 2 ? view_width - 1 : view_width ))
+    typeset line
+    for (( i = view_top; i <= bot; i++ )); do
+      if (( i == cursor )); then
+        line="  ▶ ${display_items[i]}"
+      else
+        line="    ${display_items[i]}"
+      fi
+      if (( max_chars > 0 && ${#line} > max_chars )); then
+        line="${line[1,$max_chars]}"
+      fi
+      print -r -- "$line"
+    done
+    printf '%s' $'\033[J'
   }
 
   _llmc_render_full() {
@@ -364,18 +404,7 @@ _llmc_interactive() {
     print -r -- "╚═══════════════════════════════════════════════════════════╝"
     print ""
 
-    _llmc_adjust_view
-    typeset -i i bot
-    bot=$(( view_top + view_height - 1 ))
-    (( bot > ${#items} )) && bot=${#items}
-    for (( i = view_top; i <= bot; i++ )); do
-      if (( i == cursor )); then
-        print -r -- "  ▶ ${display_items[i]}"
-      else
-        print -r -- "    ${display_items[i]}"
-      fi
-    done
-    printf '%s' $'\033[J'
+    _llmc_render_list
   }
 
   _llmc_build_items() {
@@ -474,28 +503,16 @@ _llmc_interactive() {
     case "$key" in
       k|up)
         if (( cursor > 1 )); then
-          typeset -i old_cursor=$cursor old_top=$view_top
           (( cursor-- ))
           _llmc_adjust_view
-          if (( view_top != old_top )); then
-            needs_refresh=1
-          else
-            _llmc_render_item $old_cursor 0
-            _llmc_render_item $cursor 1
-          fi
+          _llmc_render_list
         fi
         ;;
       j|down)
         if (( cursor < ${#items} )); then
-          typeset -i old_cursor=$cursor old_top=$view_top
           (( cursor++ ))
           _llmc_adjust_view
-          if (( view_top != old_top )); then
-            needs_refresh=1
-          else
-            _llmc_render_item $old_cursor 0
-            _llmc_render_item $cursor 1
-          fi
+          _llmc_render_list
         fi
         ;;
       h|left)
@@ -504,15 +521,9 @@ _llmc_interactive() {
           for (( idx = cursor - 1; idx >= 1; idx-- )); do
             typeset t="${items[idx]%%|*}"
             if [[ "$t" == "dir" ]]; then
-              typeset -i old_cursor=$cursor old_top=$view_top
               cursor=$idx
               _llmc_adjust_view
-              if (( view_top != old_top )); then
-                needs_refresh=1
-              else
-                _llmc_render_item $old_cursor 0
-                _llmc_render_item $cursor 1
-              fi
+              _llmc_render_list
               break
             fi
           done
@@ -539,15 +550,9 @@ _llmc_interactive() {
           for (( idx = cursor + 1; idx <= ${#items}; idx++ )); do
             typeset t="${items[idx]%%|*}"
             if [[ "$t" == "dir" ]]; then
-              typeset -i old_cursor=$cursor old_top=$view_top
               cursor=$idx
               _llmc_adjust_view
-              if (( view_top != old_top )); then
-                needs_refresh=1
-              else
-                _llmc_render_item $old_cursor 0
-                _llmc_render_item $cursor 1
-              fi
+              _llmc_render_list
               break
             fi
           done
