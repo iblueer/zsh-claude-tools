@@ -587,9 +587,9 @@ _llmc_interactive() {
         fi
         if [[ "$sel_type" == "env" ]]; then
           if _llmc_is_starred "$sel_display"; then
-            _llmc_remove_star "$sel_display"
+            _llmc_remove_star "$sel_display" >/dev/null 2>&1 || true
           else
-            _llmc_add_star "$sel_display"
+            _llmc_add_star "$sel_display" >/dev/null 2>&1 || true
           fi
           needs_refresh=1
         fi
