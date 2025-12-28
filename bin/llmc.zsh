@@ -299,6 +299,34 @@ _llmc_interactive() {
   typeset -i view_height=1
   typeset -i view_width=80
 
+  _llmc_trunc_to_cols() {
+    typeset s="$1"
+    typeset -i max_cols="$2"
+    (( max_cols < 0 )) && max_cols=0
+    typeset -i w=0
+    typeset out="" ch
+    for ch in ${(s::)s}; do
+      typeset -i cw=1
+      [[ "$ch" == [[:ascii:]] ]] || cw=2
+      if (( w + cw > max_cols )); then
+        break
+      fi
+      out+="$ch"
+      (( w += cw ))
+    done
+    print -r -- "$out"
+  }
+
+  _llmc_draw_row() {
+    typeset -i row="$1"; shift
+    typeset text="${1:-}"
+    printf '\033[%d;1H\033[2K' "$row"
+    if [[ -n "$text" ]]; then
+      typeset -i max_cols=$(( view_width > 2 ? view_width - 1 : view_width ))
+      printf '%s' "$(_llmc_trunc_to_cols "$text" $max_cols)"
+    fi
+  }
+
   _llmc_update_viewport() {
     typeset -i term_lines=${LINES:-0}
     typeset -i term_cols=${COLUMNS:-0}
@@ -336,73 +364,50 @@ _llmc_interactive() {
     (( view_top > max_top )) && view_top=max_top
   }
 
-  _llmc_render_item() {
-    typeset -i idx=$1
-    typeset selected="${2:-0}"
-    if (( idx < view_top || idx > view_top + view_height - 1 )); then
-      return 0
-    fi
-    typeset -i row=$(( header_lines + 1 + idx - view_top ))
-    printf '\033[%d;1H\033[2K' "$row"
-    typeset -i max_chars=$(( view_width > 2 ? view_width - 1 : view_width ))
-    typeset line
-    if (( selected )); then
-      line="  ▶ ${display_items[idx]}"
-    else
-      line="    ${display_items[idx]}"
-    fi
-    if (( max_chars > 0 && ${#line} > max_chars )); then
-      line="${line[1,$max_chars]}"
-    fi
-    if (( selected )); then
-      printf '%s' "$line"
-    else
-      printf '%s' "$line"
-    fi
-  }
-
   _llmc_render_list() {
     _llmc_adjust_view
-    typeset -i start_row=$(( header_lines + 1 ))
-    printf '\033[%d;1H\033[J' "$start_row"
+    if (( ${#items} == 0 )); then
+      _llmc_draw_row 8 "当前目录为空：$current_dir"
+      _llmc_draw_row 9 "按 q 退出"
+      typeset -i r
+      for (( r = 10; r <= header_lines + view_height; r++ )); do
+        _llmc_draw_row $r ""
+      done
+      return 0
+    fi
 
-    typeset -i i bot
-    bot=$(( view_top + view_height - 1 ))
-    (( bot > ${#items} )) && bot=${#items}
-
-    typeset -i max_chars=$(( view_width > 2 ? view_width - 1 : view_width ))
-    typeset line
-    for (( i = view_top; i <= bot; i++ )); do
-      if (( i == cursor )); then
-        line="  ▶ ${display_items[i]}"
+    typeset -i r abs_row idx
+    for (( r = 1; r <= view_height; r++ )); do
+      abs_row=$(( header_lines + r ))
+      idx=$(( view_top + r - 1 ))
+      if (( idx > ${#items} )); then
+        _llmc_draw_row $abs_row ""
+        continue
+      fi
+      if (( idx == cursor )); then
+        _llmc_draw_row $abs_row "  ▶ ${display_items[idx]}"
       else
-        line="    ${display_items[i]}"
+        _llmc_draw_row $abs_row "    ${display_items[idx]}"
       fi
-      if (( max_chars > 0 && ${#line} > max_chars )); then
-        line="${line[1,$max_chars]}"
-      fi
-      print -r -- "$line"
     done
-    printf '%s' $'\033[J'
   }
 
   _llmc_render_full() {
-    printf '%s' $'\033[H\033[J'
-    print -r -- "╔═══════════════════════════════════════════════════════════╗"
-    print -r -- "║  LLMC - 环境选择器                                         ║"
+    _llmc_draw_row 1 "╔═══════════════════════════════════════════════════════════╗"
+    _llmc_draw_row 2 "║  LLMC - 环境选择器                                         ║"
     if (( tree_mode )); then
-      print -r -- "║  当前: ${current_env:-<未选择>}                            ║"
+      _llmc_draw_row 3 "║  当前: ${current_env:-<未选择>}                            ║"
     else
-      print -r -- "║  当前: ${current_prefix:-/}                                ║"
+      _llmc_draw_row 3 "║  当前: ${current_prefix:-/}                                ║"
     fi
-    print -r -- "╠═══════════════════════════════════════════════════════════╣"
+    _llmc_draw_row 4 "╠═══════════════════════════════════════════════════════════╣"
     if (( tree_mode )); then
-      print -r -- "║  ↑/k:上  ↓/j:下  ←/h:上个目录  →/l:下个目录  Enter:选择  Space:星标  Tab:收起  q:退出 ║"
+      _llmc_draw_row 5 "║  ↑/k:上  ↓/j:下  ←/h:上个目录  →/l:下个目录  Enter:选择  Space:星标  Tab:收起  q:退出 ║"
     else
-      print -r -- "║  ↑/k:上  ↓/j:下  ←/h:返回  →/l/Enter:选择  Space:星标  Tab:展开  q:退出 ║"
+      _llmc_draw_row 5 "║  ↑/k:上  ↓/j:下  ←/h:返回  →/l/Enter:选择  Space:星标  Tab:展开  q:退出 ║"
     fi
-    print -r -- "╚═══════════════════════════════════════════════════════════╝"
-    print ""
+    _llmc_draw_row 6 "╚═══════════════════════════════════════════════════════════╝"
+    _llmc_draw_row 7 ""
 
     _llmc_render_list
   }
@@ -482,37 +487,29 @@ _llmc_interactive() {
   }
 
   while true; do
+    _llmc_update_viewport
     if (( needs_refresh )); then
-      _llmc_update_viewport
       _llmc_build_items
-      if (( ${#items} == 0 )); then
-        _llmc_render_full
-        printf '%s' $'\033[8;1H\033[2K'; printf '%s' "当前目录为空：$current_dir"
-        printf '%s' $'\033[9;1H\033[2K'; printf '%s' "按 q 退出"
-        typeset key="$(_llmc_read_key)"
-        if [[ "$key" == "q" || "$key" == "esc" ]]; then
-          break
-        fi
-        continue
-      fi
-      _llmc_render_full
       needs_refresh=0
     fi
+    _llmc_render_full
 
     typeset key="$(_llmc_read_key)"
+    if (( ${#items} == 0 )); then
+      case "$key" in
+        q|esc) break ;;
+      esac
+      continue
+    fi
     case "$key" in
       k|up)
         if (( cursor > 1 )); then
           (( cursor-- ))
-          _llmc_adjust_view
-          _llmc_render_list
         fi
         ;;
       j|down)
         if (( cursor < ${#items} )); then
           (( cursor++ ))
-          _llmc_adjust_view
-          _llmc_render_list
         fi
         ;;
       h|left)
@@ -522,8 +519,6 @@ _llmc_interactive() {
             typeset t="${items[idx]%%|*}"
             if [[ "$t" == "dir" ]]; then
               cursor=$idx
-              _llmc_adjust_view
-              _llmc_render_list
               break
             fi
           done
@@ -551,8 +546,6 @@ _llmc_interactive() {
             typeset t="${items[idx]%%|*}"
             if [[ "$t" == "dir" ]]; then
               cursor=$idx
-              _llmc_adjust_view
-              _llmc_render_list
               break
             fi
           done
