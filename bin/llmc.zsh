@@ -76,7 +76,7 @@ _llmc_scan_tree() {
       items+=("$type|$entry|$rel|$depth")
     done < <(
       command find "$root" -mindepth 1 \
-        \( -path '*/.*' -prune \) -o \
+        \( -name '.*' -prune \) -o \
         \( -type d -o -type f -name '*.env' \) -print 2>/dev/null \
         | LC_ALL=C command sort
     )
