@@ -8,6 +8,7 @@ typeset -g LLMC_ENV_DIR="$CLAUDE_CODE_HOME/envs"
 typeset -g LLMC_STARS_FILE="$CLAUDE_CODE_HOME/stars"
 typeset -g LLMC_LAST_FILE="$LLMC_ENV_DIR/last_choice"
 typeset -gi _LLMC_IN_TUI=0
+typeset -gi _LLMC_TTY_FD=1
 
 # 工具函数
 _llmc_quiet() {
@@ -40,18 +41,18 @@ _llmc_forward() {
 _llmc_tui_restore() {
   # Re-enable autowrap and restore cursor + screen
   _LLMC_IN_TUI=0
-  printf '%s' $'\033[?7h'
-  printf '%s' $'\033[?25h'
-  printf '%s' $'\033[?1049l'
+  printf '%s' $'\033[?7h' >&$_LLMC_TTY_FD
+  printf '%s' $'\033[?25h' >&$_LLMC_TTY_FD
+  printf '%s' $'\033[?1049l' >&$_LLMC_TTY_FD
 }
 
 _llmc_tui_enter() {
   _LLMC_IN_TUI=1
-  printf '%s' $'\033[?1049h'
-  printf '%s' $'\033[H\033[J'
+  printf '%s' $'\033[?1049h' >&$_LLMC_TTY_FD
+  printf '%s' $'\033[H\033[J' >&$_LLMC_TTY_FD
   # Disable autowrap so header/items never wrap and break row-based redraw.
-  printf '%s' $'\033[?7l'
-  printf '%s' $'\033[?25l'
+  printf '%s' $'\033[?7l' >&$_LLMC_TTY_FD
+  printf '%s' $'\033[?25l' >&$_LLMC_TTY_FD
 }
 
 # 扫描整个 envs 目录树（用于“展开视图”）
@@ -226,6 +227,35 @@ _llmc_interactive() {
 
   _llmc_ensure_dirs
 
+  typeset -i _llmc_fd_saved=0
+  _llmc_setup_fds() {
+    exec 3>/dev/tty || return 1
+    _LLMC_TTY_FD=3
+    exec 5>&1 6>&2
+    exec 1>/dev/null 2>/dev/null
+    _llmc_fd_saved=1
+    return 0
+  }
+
+  _llmc_restore_fds() {
+    if (( _llmc_fd_saved )); then
+      exec 1>&5 2>&6
+      exec 5>&- 6>&-
+      exec 3>&-
+      _LLMC_TTY_FD=1
+      _llmc_fd_saved=0
+    fi
+  }
+
+  typeset -i _llmc_cleaned=0
+  _llmc_cleanup() {
+    (( _llmc_cleaned )) && return 0
+    _llmc_cleaned=1
+    _llmc_tui_restore
+    _llmc_restore_fds
+    return 0
+  }
+
   typeset current_dir="$LLMC_ENV_DIR"
   typeset current_prefix=""
   typeset -i cursor=1
@@ -241,8 +271,8 @@ _llmc_interactive() {
   # 启动时尽量把当前环境定位出来（目录层级较深时更友好）
   want_jump_env="$current_env"
 
-  trap '_llmc_tui_restore; return 130' INT TERM
-  trap '_llmc_tui_restore' EXIT
+  trap '_llmc_cleanup; return 130' INT TERM
+  trap '_llmc_cleanup' EXIT
 
   _llmc_activate_current() {
     typeset selected="${items[cursor]}"
@@ -288,13 +318,14 @@ _llmc_interactive() {
       return 1
     fi
 
-    _llmc_tui_restore
+    _llmc_cleanup
     trap - INT TERM EXIT WINCH
     print -r -- ""
     _llmc_forward use "$sel_display"
     return 0
   }
 
+  _llmc_setup_fds || { _llmc_err "无法打开 /dev/tty"; return 2; }
   _llmc_tui_enter
 
   typeset -a items=()
@@ -326,10 +357,10 @@ _llmc_interactive() {
   _llmc_draw_row() {
     typeset -i row="$1"; shift
     typeset text="${1:-}"
-    printf '\033[%d;1H\033[2K' "$row"
+    printf '\033[%d;1H\033[2K' "$row" >&$_LLMC_TTY_FD
     if [[ -n "$text" ]]; then
       typeset -i max_cols=$(( view_width > 2 ? view_width - 1 : view_width ))
-      printf '%s' "$(_llmc_trunc_to_cols "$text" $max_cols)"
+      printf '%s' "$(_llmc_trunc_to_cols "$text" $max_cols)" >&$_LLMC_TTY_FD
     fi
   }
 
@@ -606,7 +637,7 @@ _llmc_interactive() {
     esac
   done
 
-  _llmc_tui_restore
+  _llmc_cleanup
   trap - INT TERM EXIT WINCH
 }
 
