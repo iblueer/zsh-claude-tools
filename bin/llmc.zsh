@@ -7,12 +7,16 @@
 typeset -g LLMC_ENV_DIR="$CLAUDE_CODE_HOME/envs"
 typeset -g LLMC_STARS_FILE="$CLAUDE_CODE_HOME/stars"
 typeset -g LLMC_LAST_FILE="$LLMC_ENV_DIR/last_choice"
+typeset -gi _LLMC_IN_TUI=0
 
 # 工具函数
-_llmc_info() { print -r -- "▸ $*"; }
-_llmc_warn() { print -r -- "⚠ $*"; }
+_llmc_quiet() {
+  [[ "${LLMC_QUIET:-0}" == "1" ]] || (( _LLMC_IN_TUI ))
+}
+_llmc_info() { _llmc_quiet && return 0; print -r -- "▸ $*"; }
+_llmc_warn() { _llmc_quiet && return 0; print -r -- "⚠ $*"; }
 _llmc_err()  { print -r -- "✗ $*"; }
-_llmc_ok()   { print -r -- "✓ $*"; }
+_llmc_ok()   { _llmc_quiet && return 0; print -r -- "✓ $*"; }
 
 _llmc_switch_cmd() {
   if command -v claude-switch >/dev/null 2>&1; then
@@ -35,12 +39,14 @@ _llmc_forward() {
 
 _llmc_tui_restore() {
   # Re-enable autowrap and restore cursor + screen
+  _LLMC_IN_TUI=0
   printf '%s' $'\033[?7h'
   printf '%s' $'\033[?25h'
   printf '%s' $'\033[?1049l'
 }
 
 _llmc_tui_enter() {
+  _LLMC_IN_TUI=1
   printf '%s' $'\033[?1049h'
   printf '%s' $'\033[H\033[J'
   # Disable autowrap so header/items never wrap and break row-based redraw.
@@ -602,7 +608,6 @@ _llmc_interactive() {
 
   _llmc_tui_restore
   trap - INT TERM EXIT WINCH
-  _llmc_info "已退出"
 }
 
 # 命令行接口
