@@ -34,6 +34,8 @@ _llmc_forward() {
 }
 
 _llmc_tui_restore() {
+  # Re-enable autowrap and restore cursor + screen
+  printf '%s' $'\033[?7h'
   printf '%s' $'\033[?25h'
   printf '%s' $'\033[?1049l'
 }
@@ -41,6 +43,8 @@ _llmc_tui_restore() {
 _llmc_tui_enter() {
   printf '%s' $'\033[?1049h'
   printf '%s' $'\033[H\033[J'
+  # Disable autowrap so header/items never wrap and break row-based redraw.
+  printf '%s' $'\033[?7l'
   printf '%s' $'\033[?25l'
 }
 
@@ -70,7 +74,12 @@ _llmc_scan_tree() {
       depth=0
       [[ "$rel" == */* ]] && depth=$(( ${#${(s:/:)rel}} - 1 ))
       items+=("$type|$entry|$rel|$depth")
-    done < <(command find "$root" -mindepth 1 \( -type d -o -type f -name '*.env' \) -print 2>/dev/null | LC_ALL=C command sort)
+    done < <(
+      command find "$root" -mindepth 1 \
+        \( -path '*/.*' -prune \) -o \
+        \( -type d -o -type f -name '*.env' \) -print 2>/dev/null \
+        | LC_ALL=C command sort
+    )
   else
     # 降级：仅一层（无 find 时）
     typeset item_type item_path item_display
