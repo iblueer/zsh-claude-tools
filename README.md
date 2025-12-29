@@ -152,6 +152,20 @@ export ANTHROPIC_SMALL_FAST_MODEL="claude-3-haiku"
 
 ---
 
+## 迁移到 cc-switch（可选）
+
+如果你之前使用 `llmc/claude-switch` 管理 `~/.claude/envs/**/*.env`，现在希望把这些环境批量导入 `cc-switch` 的数据库，请看：  
+[llmc → cc-switch 迁移操作手册](docs/llmc-to-cc-switch.md)
+
+---
+
+## 导入到 CodeSwitch.app（可选）
+
+如果你在使用 CodeSwitch.app，并希望把 `~/.claude/envs/**/*.env` 导入到其 `~/.code-switch/claude-code.json`，请看：  
+[llmc → CodeSwitch.app 导入操作手册](docs/llmc-to-codeswitch.md)
+
+---
+
 ## 项目结构
 
 ```

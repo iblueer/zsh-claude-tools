@@ -3,3 +3,7 @@
 
 # tests / temp
 .tmp/
+
+# Python
+__pycache__/
+*.pyc
