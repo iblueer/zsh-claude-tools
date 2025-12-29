@@ -83,7 +83,7 @@ ENV
 
   echo "== switch foo =="
   echo 'export ANTHROPIC_BASE_URL="https://x.example.com"' >> "$CLAUDE_CODE_HOME/envs/foo.env"
-  _run 'claude-switch use foo ; test "$ANTHROPIC_BASE_URL" = "https://x.example.com"' || { echo "FAIL: switch foo"; exit 1; }
+  _run 'claude-switch use foo ; test "$ANTHROPIC_BASE_URL" = "https://x.example.com" ; test "$ANTHROPIC_DEFAULT_SONNET_MODEL" = "$ANTHROPIC_MODEL" ; test "$ANTHROPIC_DEFAULT_HAIKU_MODEL" = "$ANTHROPIC_SMALL_FAST_MODEL"' || { echo "FAIL: switch foo"; exit 1; }
 
   echo "== del reject =="
   ret=0

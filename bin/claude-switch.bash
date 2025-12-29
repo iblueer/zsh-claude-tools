@@ -238,6 +238,18 @@ _cu_load_env() {
     fi
   done < "$file"
 
+  # Derived defaults (keep in sync with Claude settings.json)
+  if [ -n "${ANTHROPIC_MODEL:-}" ]; then
+    export ANTHROPIC_DEFAULT_SONNET_MODEL="$ANTHROPIC_MODEL" 2>/dev/null || true
+  else
+    unset ANTHROPIC_DEFAULT_SONNET_MODEL 2>/dev/null || true
+  fi
+  if [ -n "${ANTHROPIC_SMALL_FAST_MODEL:-}" ]; then
+    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ANTHROPIC_SMALL_FAST_MODEL" 2>/dev/null || true
+  else
+    unset ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null || true
+  fi
+
   # 强制恢复关键环境变量 - 确保即使上面失败也会执行
   export PATH="$saved_path"
   export HOME="$saved_home"
