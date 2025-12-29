@@ -70,7 +70,7 @@ export ANTHROPIC_BASE_URL="https://x.example.com"
 export ANTHROPIC_MODEL="m1"
 export ANTHROPIC_SMALL_FAST_MODEL="m2"
 ENV
-    $sh -c "set -e; export CLAUDE_CODE_HOME='$tmp/.claude'; source '$BIN'; claude-switch use foo >/dev/null 2>&1"
+    $sh -c "set -e; export CLAUDE_CODE_HOME='$tmp/.claude'; export ANTHROPIC_BASE_URL='KEEP'; export ANTHROPIC_MODEL='KEEP'; export ANTHROPIC_SMALL_FAST_MODEL='KEEP'; source '$BIN'; claude-switch use foo >/dev/null 2>&1; test \"\$ANTHROPIC_BASE_URL\" = 'KEEP'; test \"\$ANTHROPIC_MODEL\" = 'KEEP'; test \"\$ANTHROPIC_SMALL_FAST_MODEL\" = 'KEEP'"
     grep -q '"model": "m1"' "$settings" || { echo "FAIL: claude settings should update top-level model"; exit 1; }
     grep -q '"ANTHROPIC_BASE_URL": "https://x.example.com"' "$settings" || { echo "FAIL: claude settings should update ANTHROPIC_BASE_URL"; exit 1; }
     grep -q '"ANTHROPIC_MODEL": "m1"' "$settings" || { echo "FAIL: claude settings should update ANTHROPIC_MODEL"; exit 1; }
@@ -81,14 +81,14 @@ ENV
     grep -q '"FOO": "bar"' "$settings" || { echo "FAIL: claude settings should preserve non-ANTHROPIC env keys"; exit 1; }
   fi
 
-  echo "== switch foo =="
+  echo "== use does not mutate shell env =="
   echo 'export ANTHROPIC_BASE_URL="https://x.example.com"' >> "$CLAUDE_CODE_HOME/envs/foo.env"
-  _run 'claude-switch use foo ; test "$ANTHROPIC_BASE_URL" = "https://x.example.com" ; test "$ANTHROPIC_DEFAULT_SONNET_MODEL" = "$ANTHROPIC_MODEL" ; test "$ANTHROPIC_DEFAULT_HAIKU_MODEL" = "$ANTHROPIC_SMALL_FAST_MODEL"' || { echo "FAIL: switch foo"; exit 1; }
+  _run 'export ANTHROPIC_BASE_URL=KEEP ANTHROPIC_MODEL=KEEP ANTHROPIC_SMALL_FAST_MODEL=KEEP ANTHROPIC_DEFAULT_SONNET_MODEL=KEEP ANTHROPIC_DEFAULT_HAIKU_MODEL=KEEP; claude-switch use foo >/dev/null 2>&1; test "$ANTHROPIC_BASE_URL" = KEEP; test "$ANTHROPIC_MODEL" = KEEP; test "$ANTHROPIC_SMALL_FAST_MODEL" = KEEP; test "$ANTHROPIC_DEFAULT_SONNET_MODEL" = KEEP; test "$ANTHROPIC_DEFAULT_HAIKU_MODEL" = KEEP' || { echo "FAIL: use mutated shell env"; exit 1; }
 
   if command -v python3 >/dev/null 2>&1; then
     echo "== clear removes Claude settings env + model =="
-    _run 'claude-switch clear >/dev/null 2>&1 ; test -z "${ANTHROPIC_BASE_URL:-}" ; test -z "${ANTHROPIC_MODEL:-}" ; test -z "${ANTHROPIC_SMALL_FAST_MODEL:-}" ; test -z "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" ; test -z "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}"' \
-      || { echo "FAIL: clear should unset env vars"; exit 1; }
+    _run 'export ANTHROPIC_BASE_URL=KEEP ANTHROPIC_MODEL=KEEP ANTHROPIC_SMALL_FAST_MODEL=KEEP ANTHROPIC_DEFAULT_SONNET_MODEL=KEEP ANTHROPIC_DEFAULT_HAIKU_MODEL=KEEP; claude-switch clear >/dev/null 2>&1; test "$ANTHROPIC_BASE_URL" = KEEP; test "$ANTHROPIC_MODEL" = KEEP; test "$ANTHROPIC_SMALL_FAST_MODEL" = KEEP; test "$ANTHROPIC_DEFAULT_SONNET_MODEL" = KEEP; test "$ANTHROPIC_DEFAULT_HAIKU_MODEL" = KEEP' \
+      || { echo "FAIL: clear should not touch shell env vars"; exit 1; }
     grep -q '"env": {}' "$CLAUDE_CODE_HOME/settings.json" || { echo "FAIL: clear should empty settings env"; exit 1; }
     ! grep -q '"model"' "$CLAUDE_CODE_HOME/settings.json" || { echo "FAIL: clear should remove settings model"; exit 1; }
   fi

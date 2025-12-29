@@ -20,7 +20,7 @@
   - `llmc`：启动交互式选择器（推荐）
   - `list`：列出所有环境
   - `claude-switch use <name>`：切换环境
-  - `claude-switch clear`：清理 Claude settings.json env，并清理当前环境变量
+  - `claude-switch clear`：清理 Claude settings.json env 与 model（不修改当前 shell 环境变量）
   - `claude-switch <name>`：切换环境（兼容旧用法）
   - `new <name>`：新建配置并打开编辑器
   - `edit <name>`：编辑配置（不存在则创建模板）
@@ -99,7 +99,7 @@ llmc starred          # 列出所有星标项
 # 直接切换（支持模糊匹配）
 llmc prod             # 切换到包含 "prod" 的环境
 
-# 清理 Claude settings.json env + 当前环境变量
+# 清理 Claude settings.json env + model（不修改当前 shell 环境变量）
 llmc clear
 ```
 
@@ -126,7 +126,7 @@ claude-switch del foo
 # 显示默认记忆与当前生效的变量
 claude-switch show
 
-# 清理 Claude settings.json env + 当前环境变量
+# 清理 Claude settings.json env + model（不修改当前 shell 环境变量）
 claude-switch clear
 
 # 打开环境目录

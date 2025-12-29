@@ -21,13 +21,18 @@ _cu_claude_settings_path() {
 }
 
 _cu_sync_claude_settings() {
+  local -a pairs=("$@")
   command -v python3 >/dev/null 2>&1 || return 0
   [[ -d "$CLAUDE_CODE_HOME" ]] || mkdir -p "$CLAUDE_CODE_HOME" 2>/dev/null || true
 
   local settings_path
   settings_path="$(_cu_claude_settings_path)" || return 0
 
-  python3 - "$settings_path" <<'PY' >/dev/null 2>&1 || true
+  local python
+  python="$(command -v python3)" || return 0
+
+  # Run with a clean environment so we only write values parsed from the .env file.
+  env -i "${pairs[@]}" "$python" - "$settings_path" <<'PY' >/dev/null 2>&1 || true
 import json
 import os
 import sys
@@ -309,25 +314,13 @@ _cu_open_path() {
 _cu_load_env() {
   local file="$1"
 
-  # 立即保存PATH - 在任何操作之前
-  local saved_path="$PATH"
-  local saved_home="$HOME"
-  local saved_shell="$SHELL"
-  local saved_user="$USER"
-  local saved_logname="$LOGNAME"
-
   if [[ ! -f "$file" ]]; then
     _cu_err "未找到环境文件：$file"
     return 1
   fi
 
-  # 安全地清理 ANTHROPIC_ 开头的环境变量
-  local var
-  for var in ${(k)parameters[(I)ANTHROPIC_*]}; do
-    unset "$var" 2>/dev/null || true
-  done
-
-  # 使用临时变量读取 .env 文件，避免 set -a 的副作用
+  # 解析 .env 文件（不 export 到当前 shell，只用于写入 settings.json）
+  typeset -gA _CU_ENV_MAP=()
   local line key value
   while IFS= read -r line || [[ -n "$line" ]]; do
     # 跳过注释和空行
@@ -335,41 +328,36 @@ _cu_load_env() {
     [[ -z "${line// /}" ]] && continue
 
     # 解析 export 语句
-    if [[ "$line" =~ ^[[:space:]]*export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+    if [[ "$line" =~ ^[[:space:]]*export[[:space:]]+\"?([A-Za-z_][A-Za-z0-9_]*)\"?=(.*)$ ]]; then
       key="${match[1]}"
       value="${match[2]}"
 
       # 移除引号
+      key="${key%\"}"; key="${key#\"}"
+      key="${key%\'}"; key="${key#\'}"
       value="${value%\"}"
       value="${value#\"}"
       value="${value%\'}"
       value="${value#\'}"
 
-      # 只导出 ANTHROPIC_ 开头的变量
+      # 只记录 ANTHROPIC_ 开头的变量
       if [[ "$key" == ANTHROPIC_* ]]; then
-        export "$key=$value" 2>/dev/null || true
+        _CU_ENV_MAP[$key]="$value"
       fi
     fi
   done < "$file"
 
-  # Derived defaults (keep in sync with Claude settings.json)
-  if [[ -n "${ANTHROPIC_MODEL:-}" ]]; then
-    export ANTHROPIC_DEFAULT_SONNET_MODEL="$ANTHROPIC_MODEL" 2>/dev/null || true
+  # Derived defaults for settings.json
+  if [[ -n "${_CU_ENV_MAP[ANTHROPIC_MODEL]:-}" ]]; then
+    _CU_ENV_MAP[ANTHROPIC_DEFAULT_SONNET_MODEL]="${_CU_ENV_MAP[ANTHROPIC_MODEL]}"
   else
-    unset ANTHROPIC_DEFAULT_SONNET_MODEL 2>/dev/null || true
+    unset '_CU_ENV_MAP[ANTHROPIC_DEFAULT_SONNET_MODEL]' 2>/dev/null || true
   fi
-  if [[ -n "${ANTHROPIC_SMALL_FAST_MODEL:-}" ]]; then
-    export ANTHROPIC_DEFAULT_HAIKU_MODEL="$ANTHROPIC_SMALL_FAST_MODEL" 2>/dev/null || true
+  if [[ -n "${_CU_ENV_MAP[ANTHROPIC_SMALL_FAST_MODEL]:-}" ]]; then
+    _CU_ENV_MAP[ANTHROPIC_DEFAULT_HAIKU_MODEL]="${_CU_ENV_MAP[ANTHROPIC_SMALL_FAST_MODEL]}"
   else
-    unset ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null || true
+    unset '_CU_ENV_MAP[ANTHROPIC_DEFAULT_HAIKU_MODEL]' 2>/dev/null || true
   fi
-
-  # 强制恢复关键环境变量 - 确保即使上面失败也会执行
-  export PATH="$saved_path"
-  export HOME="$saved_home"
-  export SHELL="$saved_shell"
-  export USER="$saved_user"
-  export LOGNAME="$saved_logname"
 
   return 0
 }
@@ -382,26 +370,47 @@ _cu_show() {
   else
     _cu_info "暂无已记忆默认环境。"
   fi
-  print -r -- "当前生效变量："
-  printf '  %-28s = %s\n' ANTHROPIC_BASE_URL "${ANTHROPIC_BASE_URL:-<未设置>}"
-  printf '  %-28s = %s\n' ANTHROPIC_AUTH_TOKEN "${ANTHROPIC_AUTH_TOKEN:+<已设置>}"
-  printf '  %-28s = %s\n' ANTHROPIC_MODEL "${ANTHROPIC_MODEL:-<未设置>}"
-  printf '  %-28s = %s\n' ANTHROPIC_SMALL_FAST_MODEL "${ANTHROPIC_SMALL_FAST_MODEL:-<未设置>}"
+  print -r -- "当前 Claude 配置（$CLAUDE_CODE_HOME/settings.json）："
+  command -v python3 >/dev/null 2>&1 || { _cu_warn "未找到 python3，无法读取 settings.json"; return 0; }
+  local settings_path
+  settings_path="$(_cu_claude_settings_path)" || return 0
+  [[ -f "$settings_path" ]] || { _cu_warn "未找到：$settings_path"; return 0; }
+  python3 - "$settings_path" <<'PY'
+import json, sys
+path = sys.argv[1]
+try:
+    data = json.load(open(path, "r", encoding="utf-8"))
+except Exception:
+    print("  (无法解析 settings.json)")
+    raise SystemExit(0)
+env = data.get("env") if isinstance(data, dict) else None
+env = env if isinstance(env, dict) else {}
+
+def show(key: str, secret: bool = False) -> str:
+    v = env.get(key)
+    if v is None or v == "":
+        return "<未设置>"
+    if secret:
+        return "<已设置>"
+    return str(v)
+
+print(f'  {"model":<28} = {data.get("model","<未设置>")}')
+print(f'  {"ANTHROPIC_BASE_URL":<28} = {show("ANTHROPIC_BASE_URL")}')
+print(f'  {"ANTHROPIC_AUTH_TOKEN":<28} = {show("ANTHROPIC_AUTH_TOKEN", True)}')
+print(f'  {"ANTHROPIC_MODEL":<28} = {show("ANTHROPIC_MODEL")}')
+print(f'  {"ANTHROPIC_SMALL_FAST_MODEL":<28} = {show("ANTHROPIC_SMALL_FAST_MODEL")}')
+print(f'  {"ANTHROPIC_DEFAULT_SONNET_MODEL":<28} = {show("ANTHROPIC_DEFAULT_SONNET_MODEL")}')
+print(f'  {"ANTHROPIC_DEFAULT_HAIKU_MODEL":<28} = {show("ANTHROPIC_DEFAULT_HAIKU_MODEL")}')
+PY
 }
 
 _cu_cmd_clear() {
   _cu_ensure_envdir
 
-  local var
-  for var in ${(k)parameters[(I)ANTHROPIC_*]}; do
-    unset "$var" 2>/dev/null || true
-  done
-  unset ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null || true
-
   _cu_clear_claude_settings
 
   : > "$CLAUDE_USE_LAST"
-  _cu_ok "已清理 Claude settings.json env 与当前环境变量"
+  _cu_ok "已清理 Claude settings.json env 与 model"
   _cu_show
 }
 
@@ -432,7 +441,12 @@ _cu_cmd_switch() {
   local file="$CLAUDE_USE_ENV_DIR/$name"
   if _cu_with_spinner "加载环境..." _cu_load_env "$file"; then
     print -r -- "${name%.env}" > "$CLAUDE_USE_LAST"
-    _cu_sync_claude_settings
+    local -a pairs=()
+    local k
+    for k in ${(ok)_CU_ENV_MAP}; do
+      pairs+=("$k=${_CU_ENV_MAP[$k]}")
+    done
+    _cu_sync_claude_settings "${pairs[@]}"
     _cu_ok "已切换到环境：${name%.env}（已保存为默认）"
     _cu_show
   else
@@ -507,11 +521,11 @@ _cu_help() {
 用法：
   claude-switch list                 列出全部环境
   claude-switch use <name>           切换到 <name> 环境（无需 .env 后缀）
-  claude-switch clear                清理 Claude settings.json env，并清理当前环境变量
+  claude-switch clear                清理 Claude settings.json env 与 model（不修改当前 shell 环境变量）
   claude-switch new <name>           新建 <name>.env，并打开编辑器
   claude-switch edit <name>          编辑 <name>.env（不存在则创建模板）
   claude-switch del <name>           删除 <name>.env（需输入 yes 确认）
-  claude-switch show|current         显示已记忆的默认与当前变量
+  claude-switch show|current         显示已记忆默认与 Claude settings.json
   claude-switch open|dir             打开环境目录
   claude-switch help                 显示本帮助
 
@@ -582,6 +596,12 @@ _cu_autoload_on_startup() {
     [[ "$chosen" == *.env ]] || chosen="$chosen.env"
     local file="$CLAUDE_USE_ENV_DIR/$chosen"
     _cu_load_env "$file" >/dev/null 2>&1 || true
+    local -a pairs=()
+    local k
+    for k in ${(ok)_CU_ENV_MAP}; do
+      pairs+=("$k=${_CU_ENV_MAP[$k]}")
+    done
+    _cu_sync_claude_settings "${pairs[@]}" >/dev/null 2>&1 || true
   fi
 }
 
