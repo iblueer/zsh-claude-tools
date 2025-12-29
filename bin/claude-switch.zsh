@@ -15,258 +15,76 @@ _cu_warn() { print -r -- "⚠ $*"; }
 _cu_err()  { print -r -- "✗ $*"; }
 _cu_ok()   { print -r -- "✓ $*"; }
 
-# VSCode settings sync (claudeCode.environmentVariables)
-_cu_vscode_settings_path() {
-  if [[ -n "${CLAUDE_VSCODE_SETTINGS:-}" ]]; then
-    print -r -- "$CLAUDE_VSCODE_SETTINGS"
-    return 0
-  fi
-  case "$OSTYPE" in
-    darwin*)
-      print -r -- "$HOME/Library/Application Support/Code/User/settings.json"
-      ;;
-    linux*)
-      print -r -- "${XDG_CONFIG_HOME:-$HOME/.config}/Code/User/settings.json"
-      ;;
-    msys*|cygwin*|win32*|mingw*)
-      if [[ -n "${APPDATA:-}" ]]; then
-        print -r -- "$APPDATA/Code/User/settings.json"
-      else
-        print -r -- "$HOME/AppData/Roaming/Code/User/settings.json"
-      fi
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+# Claude settings sync (~/.claude/settings.json)
+_cu_claude_settings_path() {
+  print -r -- "$CLAUDE_CODE_HOME/settings.json"
 }
 
-_cu_sync_vscode_envvars() {
-  # Enable only when explicitly requested, or when running inside VSCode.
-  if [[ "${CLAUDE_SYNC_VSCODE_SETTINGS:-auto}" == "0" ]]; then
-    return 0
-  fi
-  if [[ "${CLAUDE_SYNC_VSCODE_SETTINGS:-auto}" != "1" ]]; then
-    [[ "${TERM_PROGRAM:-}" == "vscode" || -n "${VSCODE_PID:-}" ]] || return 0
-  fi
+_cu_sync_claude_settings() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  [[ -d "$CLAUDE_CODE_HOME" ]] || mkdir -p "$CLAUDE_CODE_HOME" 2>/dev/null || true
 
   local settings_path
-  settings_path="$(_cu_vscode_settings_path)" || return 0
-  [[ -f "$settings_path" ]] || return 0
-  command -v python3 >/dev/null 2>&1 || return 0
+  settings_path="$(_cu_claude_settings_path)" || return 0
 
-  local prefix="ANTHROPIC_"
-
-  python3 - "$settings_path" "$prefix" <<'PY' >/dev/null 2>&1 || true
+  python3 - "$settings_path" <<'PY' >/dev/null 2>&1 || true
 import json
 import os
-import re
 import sys
-from typing import Any
+import tempfile
 
 settings_path = sys.argv[1]
-prefix = sys.argv[2]
+prefix = "ANTHROPIC_"
 
-def find_matching(text: str, start: int, open_ch: str, close_ch: str) -> int:
-    depth = 0
-    i = start
-    in_str = False
-    str_ch = ""
-    esc = False
-    in_line_comment = False
-    in_block_comment = False
-    while i < len(text):
-        ch = text[i]
-        nxt = text[i + 1] if i + 1 < len(text) else ""
+try:
+    with open(settings_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except FileNotFoundError:
+    data = {}
+except Exception:
+    sys.exit(0)
 
-        if in_line_comment:
-            if ch == "\n":
-                in_line_comment = False
-            i += 1
-            continue
+if not isinstance(data, dict):
+    data = {}
 
-        if in_block_comment:
-            if ch == "*" and nxt == "/":
-                in_block_comment = False
-                i += 2
-                continue
-            i += 1
-            continue
-
-        if in_str:
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == str_ch:
-                in_str = False
-            i += 1
-            continue
-
-        if ch in ("'", '"'):
-            in_str = True
-            str_ch = ch
-            i += 1
-            continue
-
-        if ch == "/" and nxt == "/":
-            in_line_comment = True
-            i += 2
-            continue
-
-        if ch == "/" and nxt == "*":
-            in_block_comment = True
-            i += 2
-            continue
-
-        if ch == open_ch:
-            depth += 1
-        elif ch == close_ch:
-            depth -= 1
-            if depth == 0:
-                return i
-        i += 1
-    raise ValueError("unmatched bracket")
-
-
-def strip_jsonc(text: str) -> str:
-    out: list[str] = []
-    i = 0
-    in_str = False
-    str_ch = ""
-    esc = False
-    in_line_comment = False
-    in_block_comment = False
-    while i < len(text):
-        ch = text[i]
-        nxt = text[i + 1] if i + 1 < len(text) else ""
-
-        if in_line_comment:
-            if ch == "\n":
-                in_line_comment = False
-                out.append(ch)
-            i += 1
-            continue
-
-        if in_block_comment:
-            if ch == "*" and nxt == "/":
-                in_block_comment = False
-                i += 2
-                continue
-            i += 1
-            continue
-
-        if in_str:
-            out.append(ch)
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == str_ch:
-                in_str = False
-            i += 1
-            continue
-
-        if ch in ("'", '"'):
-            in_str = True
-            str_ch = ch
-            out.append(ch)
-            i += 1
-            continue
-
-        if ch == "/" and nxt == "/":
-            in_line_comment = True
-            i += 2
-            continue
-
-        if ch == "/" and nxt == "*":
-            in_block_comment = True
-            i += 2
-            continue
-
-        out.append(ch)
-        i += 1
-    return "".join(out)
-
-
-def remove_trailing_commas(text: str) -> str:
-    return re.sub(r",(\s*[}\]])", r"\1", text)
-
-
-def parse_jsonc_array(array_text: str) -> list[Any]:
-    cleaned = remove_trailing_commas(strip_jsonc(array_text))
-    return json.loads(cleaned)
-
-
-def format_env_array(items: list[Any], key_indent: str) -> str:
-    if not items:
-        return "[]"
-    item_indent = key_indent + "    "
-    lines: list[str] = ["["]
-    for idx, it in enumerate(items):
-        dumped = json.dumps(it, ensure_ascii=False, indent=4)
-        dumped_lines = dumped.splitlines() or [dumped]
-        for j, line in enumerate(dumped_lines):
-            suffix = "," if (j == len(dumped_lines) - 1 and idx != len(items) - 1) else ""
-            lines.append(f"{item_indent}{line}{suffix}")
-    lines.append(f"{key_indent}]")
-    return "\n".join(lines)
-
+env_obj = data.get("env")
+if not isinstance(env_obj, dict):
+    env_obj = {}
 
 desired = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
-desired = dict(sorted(desired.items(), key=lambda kv: kv[0]))
 
-text = open(settings_path, "r", encoding="utf-8").read()
+model = desired.get("ANTHROPIC_MODEL")
+small_fast = desired.get("ANTHROPIC_SMALL_FAST_MODEL")
 
-m = re.search(r'(^[ \t]*)"claudeCode\.environmentVariables"\s*:\s*\[', text, re.M)
-if m:
-    key_indent = m.group(1)
-    start = text.find("[", m.end() - 1)
-    end = find_matching(text, start, "[", "]")
-    try:
-        old_arr = parse_jsonc_array(text[start : end + 1])
-    except Exception:
-        sys.exit(0)
-
-    new_arr: list[Any] = []
-    seen: set[str] = set()
-
-    for entry in old_arr if isinstance(old_arr, list) else []:
-        if isinstance(entry, dict) and isinstance(entry.get("name"), str):
-            name = entry["name"]
-            if name.startswith(prefix):
-                if name in desired:
-                    new_arr.append({"name": name, "value": desired[name]})
-                    seen.add(name)
-                else:
-                    continue
-            else:
-                new_arr.append(entry)
-        else:
-            new_arr.append(entry)
-
-    for name, value in desired.items():
-        if name not in seen:
-            new_arr.append({"name": name, "value": value})
-
-    replacement = format_env_array(new_arr, key_indent)
-    if text[start : end + 1] != replacement:
-        text = text[:start] + replacement + text[end + 1 :]
+if model is not None and model != "":
+    desired["ANTHROPIC_DEFAULT_SONNET_MODEL"] = model
 else:
-    key_indent = "    "
-    arr = [{"name": k, "value": v} for k, v in desired.items()]
-    replacement = f'{key_indent}"claudeCode.environmentVariables": {format_env_array(arr, key_indent)}'
-    # Insert before the final '}' of the root object.
-    root_end = text.rfind("}")
-    if root_end != -1:
-        before = text[:root_end].rstrip()
-        needs_comma = before and before[-1] != "{"
-        insert = (",\n" if needs_comma and not before.endswith(",") else "\n") + replacement + "\n"
-        text = text[:root_end] + insert + text[root_end:]
+    desired.pop("ANTHROPIC_DEFAULT_SONNET_MODEL", None)
 
-if not text.endswith("\n"):
-    text += "\n"
-open(settings_path, "w", encoding="utf-8").write(text)
+if small_fast is not None and small_fast != "":
+    desired["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = small_fast
+else:
+    desired.pop("ANTHROPIC_DEFAULT_HAIKU_MODEL", None)
+
+for k in list(env_obj.keys()):
+    if isinstance(k, str) and k.startswith(prefix) and k not in desired:
+        env_obj.pop(k, None)
+
+for k, v in desired.items():
+    env_obj[k] = v
+
+data["env"] = env_obj
+
+if model is not None and model != "":
+    data["model"] = model
+
+tmp_dir = os.path.dirname(settings_path) or "."
+with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tf:
+    json.dump(data, tf, ensure_ascii=False, indent=2)
+    tf.write("\n")
+    tmp_name = tf.name
+
+os.replace(tmp_name, settings_path)
 PY
 }
 
@@ -545,7 +363,7 @@ _cu_cmd_switch() {
   local file="$CLAUDE_USE_ENV_DIR/$name"
   if _cu_with_spinner "加载环境..." _cu_load_env "$file"; then
     print -r -- "${name%.env}" > "$CLAUDE_USE_LAST"
-    _cu_sync_vscode_envvars
+    _cu_sync_claude_settings
     _cu_ok "已切换到环境：${name%.env}（已保存为默认）"
     _cu_show
   else

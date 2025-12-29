@@ -9,7 +9,8 @@ for sh in zsh bash; do
     continue
   fi
   echo "=== testing $sh ==="
-  tmp="$(mktemp -d)"
+  mkdir -p "$ROOT/.tmp"
+  tmp="$(mktemp -d "$ROOT/.tmp/claude-tools-test.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
   export CLAUDE_CODE_HOME="$tmp/.claude"
   mkdir -p "$CLAUDE_CODE_HOME/envs"
@@ -47,25 +48,37 @@ for sh in zsh bash; do
   fi
 
   if command -v python3 >/dev/null 2>&1; then
-    echo "== claude-switch syncs VSCode settings env vars =="
-    settings="$tmp/vscode-settings.json"
-    cat >"$settings" <<'JSONC'
+    echo "== claude-switch syncs Claude settings.json =="
+    settings="$CLAUDE_CODE_HOME/settings.json"
+    cat >"$settings" <<'JSON'
 {
-  // keep other keys
+  "model": "oldmodel",
   "other": 1,
-  "claudeCode.environmentVariables": [
-    { "name": "ANTHROPIC_BASE_URL", "value": "old" },
-    { "name": "ANTHROPIC_MODEL", "value": "oldmodel" },
-    { "name": "FOO", "value": "bar" },
-  ],
+  "env": {
+    "FOO": "bar",
+    "ANTHROPIC_BASE_URL": "old",
+    "ANTHROPIC_AUTH_TOKEN": "oldtoken",
+    "ANTHROPIC_MODEL": "oldmodel",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "oldmodel",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "oldhaiku",
+    "ANTHROPIC_SMALL_FAST_MODEL": "oldsf"
+  }
 }
-JSONC
-    printf 'export ANTHROPIC_BASE_URL="https://x.example.com"\n' > "$CLAUDE_CODE_HOME/envs/foo.env"
-    $sh -c "set -e; export CLAUDE_CODE_HOME='$tmp/.claude'; export CLAUDE_VSCODE_SETTINGS='$settings'; export CLAUDE_SYNC_VSCODE_SETTINGS=1; source '$BIN'; claude-switch use foo >/dev/null 2>&1"
-    grep -q '"name": "ANTHROPIC_BASE_URL"' "$settings" || { echo "FAIL: VSCode settings missing ANTHROPIC_BASE_URL"; exit 1; }
-    grep -q '"value": "https://x.example.com"' "$settings" || { echo "FAIL: VSCode settings did not update ANTHROPIC_BASE_URL value"; exit 1; }
-    ! grep -q 'ANTHROPIC_MODEL' "$settings" || { echo "FAIL: VSCode settings should remove unset ANTHROPIC_MODEL"; exit 1; }
-    grep -q '"name": "FOO"' "$settings" || { echo "FAIL: VSCode settings should preserve non-ANTHROPIC entries"; exit 1; }
+JSON
+    cat >"$CLAUDE_CODE_HOME/envs/foo.env" <<'ENV'
+export ANTHROPIC_BASE_URL="https://x.example.com"
+export ANTHROPIC_MODEL="m1"
+export ANTHROPIC_SMALL_FAST_MODEL="m2"
+ENV
+    $sh -c "set -e; export CLAUDE_CODE_HOME='$tmp/.claude'; source '$BIN'; claude-switch use foo >/dev/null 2>&1"
+    grep -q '"model": "m1"' "$settings" || { echo "FAIL: claude settings should update top-level model"; exit 1; }
+    grep -q '"ANTHROPIC_BASE_URL": "https://x.example.com"' "$settings" || { echo "FAIL: claude settings should update ANTHROPIC_BASE_URL"; exit 1; }
+    grep -q '"ANTHROPIC_MODEL": "m1"' "$settings" || { echo "FAIL: claude settings should update ANTHROPIC_MODEL"; exit 1; }
+    grep -q '"ANTHROPIC_SMALL_FAST_MODEL": "m2"' "$settings" || { echo "FAIL: claude settings should update ANTHROPIC_SMALL_FAST_MODEL"; exit 1; }
+    grep -q '"ANTHROPIC_DEFAULT_SONNET_MODEL": "m1"' "$settings" || { echo "FAIL: claude settings should set DEFAULT_SONNET from ANTHROPIC_MODEL"; exit 1; }
+    grep -q '"ANTHROPIC_DEFAULT_HAIKU_MODEL": "m2"' "$settings" || { echo "FAIL: claude settings should set DEFAULT_HAIKU from ANTHROPIC_SMALL_FAST_MODEL"; exit 1; }
+    ! grep -q 'ANTHROPIC_AUTH_TOKEN' "$settings" || { echo "FAIL: claude settings should remove unset ANTHROPIC_AUTH_TOKEN"; exit 1; }
+    grep -q '"FOO": "bar"' "$settings" || { echo "FAIL: claude settings should preserve non-ANTHROPIC env keys"; exit 1; }
   fi
 
   echo "== switch foo =="
