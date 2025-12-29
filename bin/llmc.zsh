@@ -9,6 +9,8 @@ typeset -g LLMC_STARS_FILE="$CLAUDE_CODE_HOME/stars"
 typeset -g LLMC_LAST_FILE="$LLMC_ENV_DIR/last_choice"
 typeset -gi _LLMC_IN_TUI=0
 typeset -gi _LLMC_TTY_FD=1
+typeset -gi _LLMC_CLEANED=0
+typeset -gi _LLMC_FD_SAVED=0
 
 # 工具函数
 _llmc_quiet() {
@@ -227,30 +229,31 @@ _llmc_interactive() {
 
   _llmc_ensure_dirs
 
-  typeset -i _llmc_fd_saved=0
+  _LLMC_CLEANED=0
+  _LLMC_FD_SAVED=0
+
   _llmc_setup_fds() {
     exec 3>/dev/tty || return 1
     _LLMC_TTY_FD=3
     exec 5>&1 6>&2
     exec 1>/dev/null 2>/dev/null
-    _llmc_fd_saved=1
+    _LLMC_FD_SAVED=1
     return 0
   }
 
   _llmc_restore_fds() {
-    if (( _llmc_fd_saved )); then
+    if (( _LLMC_FD_SAVED )); then
       exec 1>&5 2>&6
       exec 5>&- 6>&-
       exec 3>&-
       _LLMC_TTY_FD=1
-      _llmc_fd_saved=0
+      _LLMC_FD_SAVED=0
     fi
   }
 
-  typeset -i _llmc_cleaned=0
   _llmc_cleanup() {
-    (( _llmc_cleaned )) && return 0
-    _llmc_cleaned=1
+    (( _LLMC_CLEANED )) && return 0
+    _LLMC_CLEANED=1
     _llmc_tui_restore
     _llmc_restore_fds
     return 0
