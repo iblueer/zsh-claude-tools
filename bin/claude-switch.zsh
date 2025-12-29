@@ -8,7 +8,7 @@
 : ${CLAUDE_CODE_HOME:="$HOME/.claude"}
 typeset -g CLAUDE_USE_ENV_DIR="$CLAUDE_CODE_HOME/envs"
 typeset -g CLAUDE_USE_LAST="$CLAUDE_USE_ENV_DIR/last_choice"
-typeset -ga CLAUDE_SWITCH_SUBCOMMANDS=(help list ls use new edit del show open)
+typeset -ga CLAUDE_SWITCH_SUBCOMMANDS=(help list ls use new edit del show open clear)
 
 _cu_info() { print -r -- "▸ $*"; }
 _cu_warn() { print -r -- "⚠ $*"; }
@@ -84,6 +84,45 @@ with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_di
     tf.write("\n")
     tmp_name = tf.name
 
+os.replace(tmp_name, settings_path)
+PY
+}
+
+# Clear Claude settings.json env + model
+_cu_clear_claude_settings() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  [[ -d "$CLAUDE_CODE_HOME" ]] || mkdir -p "$CLAUDE_CODE_HOME" 2>/dev/null || true
+
+  local settings_path
+  settings_path="$(_cu_claude_settings_path)" || return 0
+
+  python3 - "$settings_path" <<'PY' >/dev/null 2>&1 || true
+import json
+import os
+import sys
+import tempfile
+
+settings_path = sys.argv[1]
+
+try:
+    with open(settings_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+except FileNotFoundError:
+    data = {}
+except Exception:
+    sys.exit(0)
+
+if not isinstance(data, dict):
+    data = {}
+
+data["env"] = {}
+data.pop("model", None)
+
+tmp_dir = os.path.dirname(settings_path) or "."
+with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tf:
+    json.dump(data, tf, ensure_ascii=False, indent=2)
+    tf.write("\n")
+    tmp_name = tf.name
 os.replace(tmp_name, settings_path)
 PY
 }
@@ -336,8 +375,10 @@ _cu_load_env() {
 }
 
 _cu_show() {
-  if [[ -f "$CLAUDE_USE_LAST" ]]; then
-    _cu_info "已记忆默认环境：$(<"$CLAUDE_USE_LAST")"
+  local saved=""
+  [[ -f "$CLAUDE_USE_LAST" ]] && saved="$(<"$CLAUDE_USE_LAST")"
+  if [[ -n "$saved" ]]; then
+    _cu_info "已记忆默认环境：$saved"
   else
     _cu_info "暂无已记忆默认环境。"
   fi
@@ -346,6 +387,22 @@ _cu_show() {
   printf '  %-28s = %s\n' ANTHROPIC_AUTH_TOKEN "${ANTHROPIC_AUTH_TOKEN:+<已设置>}"
   printf '  %-28s = %s\n' ANTHROPIC_MODEL "${ANTHROPIC_MODEL:-<未设置>}"
   printf '  %-28s = %s\n' ANTHROPIC_SMALL_FAST_MODEL "${ANTHROPIC_SMALL_FAST_MODEL:-<未设置>}"
+}
+
+_cu_cmd_clear() {
+  _cu_ensure_envdir
+
+  local var
+  for var in ${(k)parameters[(I)ANTHROPIC_*]}; do
+    unset "$var" 2>/dev/null || true
+  done
+  unset ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null || true
+
+  _cu_clear_claude_settings
+
+  : > "$CLAUDE_USE_LAST"
+  _cu_ok "已清理 Claude settings.json env 与当前环境变量"
+  _cu_show
 }
 
 _cu_cmd_list() {
@@ -450,6 +507,7 @@ _cu_help() {
 用法：
   claude-switch list                 列出全部环境
   claude-switch use <name>           切换到 <name> 环境（无需 .env 后缀）
+  claude-switch clear                清理 Claude settings.json env，并清理当前环境变量
   claude-switch new <name>           新建 <name>.env，并打开编辑器
   claude-switch edit <name>          编辑 <name>.env（不存在则创建模板）
   claude-switch del <name>           删除 <name>.env（需输入 yes 确认）
@@ -473,6 +531,7 @@ claude-switch() {
     ""|help|-h|--help)   _cu_help ;;
     list|ls)             _cu_cmd_list ;;
     use)                 _cu_cmd_switch "$1" ;;
+    clear)               _cu_cmd_clear ;;
     new)                 _cu_cmd_new "$@" ;;
     edit)                _cu_cmd_edit "$@" ;;
     del)                 _cu_cmd_del "$@" ;;
@@ -512,6 +571,7 @@ _cu_autoload_on_startup() {
   local chosen=""
   if [[ -f "$CLAUDE_USE_LAST" ]]; then
     chosen="$(<"$CLAUDE_USE_LAST")"
+    [[ -z "${chosen//[[:space:]]/}" ]] && chosen=""
   else
     local names=($(_cu_list_names))
     if (( ${#names} > 0 )); then

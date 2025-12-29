@@ -652,7 +652,7 @@ llmc() {
     ""|interactive|i)
       _llmc_interactive
       ;;
-    use|show|open|new|edit|del)
+    use|show|open|new|edit|del|clear)
       shift
       _llmc_forward "$cmd" "$@"
       ;;
@@ -701,6 +701,7 @@ llmc() {
   llmc list               列出所有环境（星标优先）
   llmc use <name>         切换到 <name> 环境（同 claude-switch use）
   llmc show               显示默认记忆与当前变量（同 claude-switch show）
+  llmc clear              清理 Claude settings.json env，并清理当前环境变量（同 claude-switch clear）
   llmc open               打开环境目录（同 claude-switch open）
   llmc new <name>         新建 <name>.env 并打开编辑器（同 claude-switch new）
   llmc edit <name>        编辑 <name>.env（同 claude-switch edit）

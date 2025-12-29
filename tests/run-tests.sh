@@ -85,6 +85,14 @@ ENV
   echo 'export ANTHROPIC_BASE_URL="https://x.example.com"' >> "$CLAUDE_CODE_HOME/envs/foo.env"
   _run 'claude-switch use foo ; test "$ANTHROPIC_BASE_URL" = "https://x.example.com" ; test "$ANTHROPIC_DEFAULT_SONNET_MODEL" = "$ANTHROPIC_MODEL" ; test "$ANTHROPIC_DEFAULT_HAIKU_MODEL" = "$ANTHROPIC_SMALL_FAST_MODEL"' || { echo "FAIL: switch foo"; exit 1; }
 
+  if command -v python3 >/dev/null 2>&1; then
+    echo "== clear removes Claude settings env + model =="
+    _run 'claude-switch clear >/dev/null 2>&1 ; test -z "${ANTHROPIC_BASE_URL:-}" ; test -z "${ANTHROPIC_MODEL:-}" ; test -z "${ANTHROPIC_SMALL_FAST_MODEL:-}" ; test -z "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" ; test -z "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}"' \
+      || { echo "FAIL: clear should unset env vars"; exit 1; }
+    grep -q '"env": {}' "$CLAUDE_CODE_HOME/settings.json" || { echo "FAIL: clear should empty settings env"; exit 1; }
+    ! grep -q '"model"' "$CLAUDE_CODE_HOME/settings.json" || { echo "FAIL: clear should remove settings model"; exit 1; }
+  fi
+
   echo "== del reject =="
   ret=0
   ( echo "no" | _run 'claude-switch del foo' ) || ret=$?
