@@ -43,11 +43,22 @@ prefix = "ANTHROPIC_"
 
 try:
     with open(settings_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw = f.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        s = raw.strip()
+        while s.endswith("\\n"):
+            s = s[:-2].rstrip()
+        try:
+            data = json.loads(s)
+        except Exception:
+            i = s.rfind("}")
+            data = json.loads(s[: i + 1]) if i != -1 else {}
 except FileNotFoundError:
     data = {}
 except Exception:
-    sys.exit(0)
+    data = {}
 
 if not isinstance(data, dict):
     data = {}
@@ -111,11 +122,22 @@ settings_path = sys.argv[1]
 
 try:
     with open(settings_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw = f.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        s = raw.strip()
+        while s.endswith("\\n"):
+            s = s[:-2].rstrip()
+        try:
+            data = json.loads(s)
+        except Exception:
+            i = s.rfind("}")
+            data = json.loads(s[: i + 1]) if i != -1 else {}
 except FileNotFoundError:
     data = {}
 except Exception:
-    sys.exit(0)
+    data = {}
 
 if not isinstance(data, dict):
     data = {}

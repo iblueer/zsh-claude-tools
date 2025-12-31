@@ -77,11 +77,24 @@ prefix = "ANTHROPIC_"
 
 try:
     with open(settings_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw = f.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        s = raw.strip()
+        # Repair common corruption: literal "\n" appended after JSON.
+        while s.endswith("\\n"):
+            s = s[:-2].rstrip()
+        try:
+            data = json.loads(s)
+        except Exception:
+            # Last resort: truncate after the last closing brace.
+            i = s.rfind("}")
+            data = json.loads(s[: i + 1]) if i != -1 else {}
 except FileNotFoundError:
     data = {}
 except Exception:
-    sys.exit(0)
+    data = {}
 
 if not isinstance(data, dict):
     data = {}
@@ -120,7 +133,7 @@ if model is not None and model != "":
 tmp_dir = os.path.dirname(settings_path) or "."
 with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tf:
     json.dump(data, tf, ensure_ascii=False, indent=2)
-    tf.write("\\n")
+    tf.write("\n")
     tmp_name = tf.name
 
 os.replace(tmp_name, settings_path)
@@ -145,11 +158,22 @@ settings_path = sys.argv[1]
 
 try:
     with open(settings_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw = f.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        s = raw.strip()
+        while s.endswith("\\n"):
+            s = s[:-2].rstrip()
+        try:
+            data = json.loads(s)
+        except Exception:
+            i = s.rfind("}")
+            data = json.loads(s[: i + 1]) if i != -1 else {}
 except FileNotFoundError:
     data = {}
 except Exception:
-    sys.exit(0)
+    data = {}
 
 if not isinstance(data, dict):
     data = {}
@@ -160,7 +184,7 @@ data.pop("model", None)
 tmp_dir = os.path.dirname(settings_path) or "."
 with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=tmp_dir) as tf:
     json.dump(data, tf, ensure_ascii=False, indent=2)
-    tf.write("\\n")
+    tf.write("\n")
     tmp_name = tf.name
 
 os.replace(tmp_name, settings_path)
@@ -177,6 +201,10 @@ _cu_is_windows() {
 # Simple spinner for long-running operations
 _cu_with_spinner() {
   local msg="$1"; shift
+  local had_monitor=0
+  case "$-" in
+    *m*) had_monitor=1; set +m ;;
+  esac
   printf "%s " "$msg"
   {
     local frames=('|' '/' '-' '\\')
@@ -194,6 +222,7 @@ _cu_with_spinner() {
   kill "$spid" 2>/dev/null
   wait "$spid" 2>/dev/null || true
   printf "\r%s\n" "$msg"
+  [ "$had_monitor" -eq 1 ] && set -m
   return $ret
 }
 
@@ -342,7 +371,18 @@ _cu_show() {
 import json, sys
 path = sys.argv[1]
 try:
-    data = json.load(open(path, "r", encoding="utf-8"))
+    raw = open(path, "r", encoding="utf-8").read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        s = raw.strip()
+        while s.endswith("\\n"):
+            s = s[:-2].rstrip()
+        try:
+            data = json.loads(s)
+        except Exception:
+            i = s.rfind("}")
+            data = json.loads(s[: i + 1]) if i != -1 else {}
 except Exception:
     print("  (无法解析 settings.json)")
     raise SystemExit(0)
