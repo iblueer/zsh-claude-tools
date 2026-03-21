@@ -24,7 +24,51 @@ BASE_URL="https://${RAW_HOST}/${REPO_PATH}/${BRANCH}"
 INSTALL_ROOT="$HOME/.claude-tools"
 BIN_DIR="$INSTALL_ROOT/bin"
 COMP_DIR="$INSTALL_ROOT/completions"
-SHELL_NAME="$(basename "${CLAUDE_TOOLS_SHELL:-${SHELL:-}}")"
+
+detect_shell_name() {
+  # 1) Allow explicit override.
+  candidate="${CLAUDE_TOOLS_SHELL:-}"
+  case "$(basename "$candidate" 2>/dev/null || printf '%s' "$candidate")" in
+    bash|zsh) printf '%s\n' "$(basename "$candidate")"; return 0 ;;
+  esac
+
+  # 2) Prefer the actual running shell when the installer is sourced/executed there.
+  if [ -n "${BASH_VERSION:-}" ]; then
+    printf '%s\n' bash
+    return 0
+  fi
+  if [ -n "${ZSH_VERSION:-}" ]; then
+    printf '%s\n' zsh
+    return 0
+  fi
+
+  # 3) When invoked via `curl | sh`, inspect the parent shell first.
+  if command -v ps >/dev/null 2>&1; then
+    candidate="$(ps -p "$PPID" -o comm= 2>/dev/null | tr -d '[:space:]')"
+    case "$(basename "$candidate" 2>/dev/null || printf '%s' "$candidate")" in
+      bash|zsh) printf '%s\n' "$(basename "$candidate")"; return 0 ;;
+    esac
+  fi
+
+  # 4) Git Bash / MSYS / Cygwin users overwhelmingly expect Bash init files.
+  case "${MSYSTEM:-}${OSTYPE:-}${TERM_PROGRAM:-}" in
+    *MINGW*|*MSYS*|*CYGWIN*)
+      printf '%s\n' bash
+      return 0
+      ;;
+  esac
+
+  # 5) Fall back to the login shell from environment if it is known.
+  candidate="${SHELL:-}"
+  case "$(basename "$candidate" 2>/dev/null || printf '%s' "$candidate")" in
+    bash|zsh) printf '%s\n' "$(basename "$candidate")"; return 0 ;;
+  esac
+
+  # 6) Preserve historical default.
+  printf '%s\n' zsh
+}
+
+SHELL_NAME="$(detect_shell_name)"
 case "$SHELL_NAME" in
   bash) INIT_FILE="$INSTALL_ROOT/init.bash" ;;
   *) SHELL_NAME=zsh; INIT_FILE="$INSTALL_ROOT/init.zsh" ;;
